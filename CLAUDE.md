@@ -1,4 +1,4 @@
-# KSeF Sync — TypeScript SDK
+# Ksefnik — TypeScript SDK
 
 ## Project Overview
 
@@ -6,8 +6,9 @@ Open-source TypeScript SDK for KSeF (Polish National e-Invoice System) reconcili
 Core value: matching KSeF invoices with bank statement transactions.
 
 **Organization**: CodeFormers-it
-**Repo**: CodeFormers-it/ksef-sync (private → public when ready)
-**Sister repo**: CodeFormers-it/ksef-sync-pro (always private)
+**Repo**: CodeFormers-it/ksefnik (private → public when ready)
+**Sister repo**: CodeFormers-it/ksefnik-pro (always private)
+**Domain**: ksefnik.pl
 
 ## Tech Stack
 
@@ -31,19 +32,19 @@ Core value: matching KSeF invoices with bank statement transactions.
 
 ```
 packages/
-  shared/        @ksef-sync/shared    — Zod schemas, types, plugin interface
-  core/          @ksef-sync/core      — SDK facade, reconciliation engine, bank parsers
-  simulator/     @ksef-sync/simulator — Offline KSeF mock server
-  mcp/           @ksef-sync/mcp       — MCP server (thin wrapper on core)
+  shared/        @ksefnik/shared    — Zod schemas, types, plugin interface
+  core/          @ksefnik/core      — SDK facade, reconciliation engine, bank parsers
+  simulator/     @ksefnik/simulator — Offline KSeF mock server
+  mcp/           @ksefnik/mcp       — MCP server (thin wrapper on core)
 
 apps/
-  cli/           @ksef-sync/cli       — CLI entry point → standalone binary
+  cli/           @ksefnik/cli       — CLI entry point → standalone binary
 ```
 
 ## Key Conventions
 
 - **pnpm workspace** with `apps/*` and `packages/*` (same as codeformers-website)
-- **SDK-first**: all logic lives in `@ksef-sync/core`. CLI, MCP, and hosted API are thin wrappers.
+- **SDK-first**: all logic lives in `@ksefnik/core`. CLI, MCP, and hosted API are thin wrappers.
 - **Plugin system**: pro features loaded via `try { await import(pkg) } catch {}` — missing = free tier.
 - **No DRM**: zero license validation in runtime, zero phone-home.
 - **Zod everywhere**: all domain models (Invoice, BankTransaction, Match) are Zod schemas.
@@ -54,7 +55,8 @@ apps/
 
 ## Architecture Principles
 
-- `KsefSync` facade with namespaces: `invoices`, `bank`, `reconciliation`, `plugins`
+- `Ksefnik` facade with namespaces: `invoices`, `bank`, `reconciliation`, `plugins`
+- Factory: `createKsefnik()`
 - Reconciliation engine: 6-pass pipeline (KSeF ref → exact NIP → invoice ref → fuzzy → partial → proximity)
 - Each pass implements `ReconciliationPass` interface with `order` number (core: 50-500, plugins: 600+)
 - Bank parsers implement `BankStatementParser` protocol with auto-detection

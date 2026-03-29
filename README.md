@@ -4,7 +4,7 @@
   </a>
 </p>
 
-<h1 align="center">KSeF Sync</h1>
+<h1 align="center">Ksefnik</h1>
 
 <p align="center">
   TypeScript SDK do reconcyliacji faktur z Krajowego Systemu e-Faktur (KSeF) z wyciagami bankowymi.
@@ -20,7 +20,7 @@
 
 ## O projekcie
 
-KSeF Sync to otwarte narzedzie stworzone przez [CodeFormers.it](https://codeformers.it/) dla polskich deweloperow i zespolow finansowych. Automatyzuje dopasowywanie faktur pobranych z KSeF do transakcji na wyciagach bankowych. SDK zapewnia pelna kontrole nad procesem reconcyliacji -- od importu danych, przez wieloetapowe dopasowywanie, az po raportowanie rozbieznosci.
+Ksefnik to otwarte narzedzie stworzone przez [CodeFormers.it](https://codeformers.it/) dla polskich deweloperow i zespolow finansowych. Automatyzuje dopasowywanie faktur pobranych z KSeF do transakcji na wyciagach bankowych. SDK zapewnia pelna kontrole nad procesem reconcyliacji -- od importu danych, przez wieloetapowe dopasowywanie, az po raportowanie rozbieznosci.
 
 Projekt jest na wczesnym etapie rozwoju. API moze sie zmieniac miedzy wersjami.
 
@@ -55,23 +55,23 @@ Pelne typy TypeScript wygenerowane z oficjalnych schematow XSD KSeF. Bledy wychw
 **Wymagania**: Node.js 22+, pnpm 9+
 
 ```bash
-npm install @ksef-sync/core
+npm install @ksefnik/core
 # lub
-pnpm add @ksef-sync/core
+pnpm add @ksefnik/core
 ```
 
 Jesli potrzebujesz symulatora KSeF do testow:
 
 ```bash
-npm install --save-dev @ksef-sync/simulator
+npm install --save-dev @ksefnik/simulator
 ```
 
 ## Szybki start
 
 ```typescript
-import { createKsefSync } from '@ksef-sync/core'
+import { createKsefnik } from '@ksefnik/core'
 
-const ksef = createKsefSync({
+const ksef = createKsefnik({
   nip: '1234567890',
   environment: 'test',
   token: process.env.KSEF_TOKEN
@@ -96,29 +96,29 @@ console.log(`Niedopasowane przelewy: ${report.unmatchedTransactions.length}`)
 
 ## Architektura
 
-KSeF Sync stosuje podejscie SDK-first -- cala logika biznesowa znajduje sie w pakiecie `core`, a pozostale pakiety (CLI, MCP server) sa cienkimi wrapperami, ktore z niego korzystaja.
+Ksefnik stosuje podejscie SDK-first -- cala logika biznesowa znajduje sie w pakiecie `core`, a pozostale pakiety (CLI, MCP server) sa cienkimi wrapperami, ktore z niego korzystaja.
 
 ```
-ksef-sync/
+ksefnik/
   packages/
-    shared/       @ksef-sync/shared      Typy Zod, interfejsy, plugin system
-    core/         @ksef-sync/core        Reconciliation engine, bank parsers, KSeF adapter
-    simulator/    @ksef-sync/simulator   Offline KSeF test harness
-    mcp/          @ksef-sync/mcp         MCP server (wrapper na core)
-    cli/          @ksef-sync/cli         CLI (Commander.js), standalone binary via bun compile
+    shared/       @ksefnik/shared      Typy Zod, interfejsy, plugin system
+    core/         @ksefnik/core        Reconciliation engine, bank parsers, KSeF adapter
+    simulator/    @ksefnik/simulator   Offline KSeF test harness
+    mcp/          @ksefnik/mcp         MCP server (wrapper na core)
+    cli/          @ksefnik/cli         CLI (Commander.js), standalone binary via bun compile
 ```
 
 | Pakiet | Opis |
 |--------|------|
-| `@ksef-sync/shared` | Wspoldzielone typy Zod, interfejsy i plugin system |
-| `@ksef-sync/core` | Glowna logika: reconciliation engine, bank parsers, adapter KSeF |
-| `@ksef-sync/simulator` | Lokalny mock serwer KSeF do testow offline |
-| `@ksef-sync/mcp` | Model Context Protocol server -- integracja z AI |
-| `@ksef-sync/cli` | Interfejs wiersza polecen, kompilacja do standalone binary |
+| `@ksefnik/shared` | Wspoldzielone typy Zod, interfejsy i plugin system |
+| `@ksefnik/core` | Glowna logika: reconciliation engine, bank parsers, adapter KSeF |
+| `@ksefnik/simulator` | Lokalny mock serwer KSeF do testow offline |
+| `@ksefnik/mcp` | Model Context Protocol server -- integracja z AI |
+| `@ksefnik/cli` | Interfejs wiersza polecen, kompilacja do standalone binary |
 
 ## MCP Server
 
-MCP server umozliwia korzystanie z KSeF Sync bezposrednio z Claude Desktop lub dowolnego klienta obslugujacego Model Context Protocol.
+MCP server umozliwia korzystanie z Ksefnik bezposrednio z Claude Desktop lub dowolnego klienta obslugujacego Model Context Protocol.
 
 ### Konfiguracja Claude Desktop
 
@@ -127,8 +127,8 @@ Dodaj ponizszy wpis do pliku konfiguracyjnego Claude Desktop (`claude_desktop_co
 ```json
 {
   "mcpServers": {
-    "ksef-sync": {
-      "command": "ksef-sync",
+    "ksefnik": {
+      "command": "ksefnik",
       "args": ["mcp"]
     }
   }
@@ -140,7 +140,7 @@ Serwer udostepnia 8 narzedzi obejmujacych reconcyliacje, import wyciagow bankowy
 ### Uruchomienie reczne
 
 ```bash
-npx @ksef-sync/cli mcp
+npx @ksefnik/cli mcp
 ```
 
 ## Stack technologiczny
@@ -164,8 +164,8 @@ npx @ksef-sync/cli mcp
 ### Uruchomienie lokalne
 
 ```bash
-git clone https://github.com/CodeFormers-it/ksef-sync.git
-cd ksef-sync
+git clone https://github.com/CodeFormers-it/ksefnik.git
+cd ksefnik
 pnpm install
 pnpm build
 ```
