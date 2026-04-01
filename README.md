@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://codeformers.it/">
-    <img src="codeformers-github.png" alt="CodeFormers.it" width="420" />
+    <img src="assets/codeformers-github.png" alt="CodeFormers.it" width="420" />
   </a>
 </p>
 
@@ -196,7 +196,7 @@ Szczegoly w pliku [LICENSE](LICENSE).
 
 <p align="center">
   <a href="https://codeformers.it/">
-    <img src="codeformers-github.png" alt="CodeFormers.it" width="280" />
+    <img src="assets/codeformers-github.png" alt="CodeFormers.it" width="280" />
   </a>
 </p>
 
