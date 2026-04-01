@@ -6,7 +6,7 @@
 
 ---
 
-## T02.1 — Zod Schemas: Invoice & BankTransaction {#t021}
+## T02.1 — Zod Schemas: Invoice & BankTransaction {#t021} ✅
 
 **Pliki:**
 - `src/schemas/invoice.schema.ts`

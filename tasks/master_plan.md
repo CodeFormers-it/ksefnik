@@ -34,7 +34,7 @@ Parallelizm: po T02 — T03+T04, T05, T06 mogą biec równolegle.
   - [x] [T01.4 — Test fixtures & directories](./plans/T01-scaffolding.md#t014)
 
 - [ ] **T02 — @ksefnik/shared** (4 subtaski)
-  - [ ] [T02.1 — Zod schemas: Invoice & BankTransaction](./plans/T02-shared.md#t021)
+  - [x] [T02.1 — Zod schemas: Invoice & BankTransaction](./plans/T02-shared.md#t021)
   - [ ] [T02.2 — Zod schemas: Match & ReconciliationReport](./plans/T02-shared.md#t022)
   - [ ] [T02.3 — Type interfaces: Plugin, Pass, Parser, Adapter, Storage, Config](./plans/T02-shared.md#t023)
   - [ ] [T02.4 — Typed errors & barrel export](./plans/T02-shared.md#t024)
