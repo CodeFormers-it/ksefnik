@@ -5,7 +5,7 @@
 
 ---
 
-## T12.1 — End-to-End Integration Tests {#t121}
+## T12.1 — End-to-End Integration Tests {#t121} ✅
 
 **Pliki:**
 - `tests/integration/full-reconciliation.test.ts` — simulator + bank fixture + reconciliation → verify report
