@@ -1,1 +1,1 @@
-export { InMemoryStorage } from './storage/index.js'
+export { InMemoryStorage, SqliteStorage } from './storage/index.js'

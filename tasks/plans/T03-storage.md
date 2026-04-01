@@ -18,7 +18,7 @@ Implementuje `Storage` z shared. Wewnętrznie `Map<string, T>`. Obsługuje filtr
 
 ---
 
-## T03.2 — SQLite Storage {#t032}
+## T03.2 — SQLite Storage {#t032} ✅
 
 **Pliki:**
 - `src/storage/sqlite.storage.ts`
