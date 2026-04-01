@@ -5,7 +5,7 @@
 
 ---
 
-## T09.1 — Mock Adapter & Scenario Infrastructure {#t091}
+## T09.1 — Mock Adapter & Scenario Infrastructure {#t091} ✅
 
 **Pliki:**
 - `src/adapter.ts` — MockKsefAdapter implements KsefAdapter
