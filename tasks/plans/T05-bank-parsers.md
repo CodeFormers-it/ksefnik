@@ -6,7 +6,7 @@
 
 ---
 
-## T05.1 — NIP Extractor & Auto-Detect {#t051}
+## T05.1 — NIP Extractor & Auto-Detect {#t051} ✅
 
 **Pliki:**
 - `src/bank/nip-extractor.ts`
