@@ -6,7 +6,7 @@
 
 ---
 
-## T10.1 — MCP Server Factory & First 4 Tools {#t101}
+## T10.1 — MCP Server Factory & First 4 Tools {#t101} ✅
 
 **Pliki:**
 - `src/server.ts` — `createMcpServer({ ksef })`, rejestruje tools

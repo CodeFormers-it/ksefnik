@@ -75,7 +75,7 @@ Parallelizm: po T02 — T03+T04, T05, T06 mogą biec równolegle.
   - [x] [T09.2 — 5 scenarios & createKsefSimulator() factory](./plans/T09-simulator.md#t092)
 
 - [ ] **T10 — @ksefnik/mcp** (2 subtaski)
-  - [ ] [T10.1 — MCP server factory & first 4 tools](./plans/T10-mcp.md#t101)
+  - [x] [T10.1 — MCP server factory & first 4 tools](./plans/T10-mcp.md#t101)
   - [ ] [T10.2 — Remaining 4 tools & package entry](./plans/T10-mcp.md#t102)
 
 - [ ] **T11 — @ksefnik/cli** (3 subtaski)
