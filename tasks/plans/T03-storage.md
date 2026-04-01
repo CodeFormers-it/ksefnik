@@ -5,7 +5,7 @@
 
 ---
 
-## T03.1 — In-Memory Storage {#t031}
+## T03.1 — In-Memory Storage {#t031} ✅
 
 **Pliki:**
 - `src/storage/in-memory.storage.ts`

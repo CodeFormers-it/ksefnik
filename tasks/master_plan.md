@@ -40,7 +40,7 @@ Parallelizm: po T02 — T03+T04, T05, T06 mogą biec równolegle.
   - [x] [T02.4 — Typed errors & barrel export](./plans/T02-shared.md#t024)
 
 - [ ] **T03 — @ksefnik/core: Storage Layer** (2 subtaski)
-  - [ ] [T03.1 — In-memory storage](./plans/T03-storage.md#t031)
+  - [x] [T03.1 — In-memory storage](./plans/T03-storage.md#t031)
   - [ ] [T03.2 — SQLite storage (bun:sqlite / better-sqlite3)](./plans/T03-storage.md#t032)
 
 - [ ] **T04 — @ksefnik/core: KSeF Adapter** (3 subtaski)
