@@ -70,9 +70,9 @@ Parallelizm: po T02 — T03+T04, T05, T06 mogą biec równolegle.
   - [x] [T08.2 — Ksefnik facade class + createKsefnik() factory](./plans/T08-facade-plugins.md#t082)
   - [x] [T08.3 — Core barrel exports & facade integration tests](./plans/T08-facade-plugins.md#t083)
 
-- [ ] **T09 — @ksefnik/simulator** (2 subtaski)
+- [x] **T09 — @ksefnik/simulator** (2 subtaski)
   - [x] [T09.1 — Mock adapter & scenario infrastructure](./plans/T09-simulator.md#t091)
-  - [ ] [T09.2 — 5 scenarios & createKsefSimulator() factory](./plans/T09-simulator.md#t092)
+  - [x] [T09.2 — 5 scenarios & createKsefSimulator() factory](./plans/T09-simulator.md#t092)
 
 - [ ] **T10 — @ksefnik/mcp** (2 subtaski)
   - [ ] [T10.1 — MCP server factory & first 4 tools](./plans/T10-mcp.md#t101)

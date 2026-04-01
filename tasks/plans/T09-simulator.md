@@ -17,7 +17,7 @@ MockKsefAdapter zwraca canned responses na podstawie scenario. Store trzyma mock
 
 ---
 
-## T09.2 — 5 Scenarios & Factory {#t092}
+## T09.2 — 5 Scenarios & Factory {#t092} ✅
 
 **Pliki:**
 - `src/scenarios/happy-path.ts` — all ops succeed instantly
