@@ -20,6 +20,7 @@
     "@ksefnik/shared": "workspace:*",
     "@ksefnik/core": "workspace:*",
     "@ksefnik/mcp": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.12",
     "commander": "^13.1",
     "@clack/prompts": "^0.10"
   },

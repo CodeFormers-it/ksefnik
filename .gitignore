@@ -1,6 +1,46 @@
+# Dependencies
 node_modules
+
+# Build output
 dist
-.turbo
+*.tsbuildinfo
+
+# Test
 coverage
+
+# Database
 *.sqlite
+*.sqlite-journal
+
+# OS
 .DS_Store
+Thumbs.db
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Turborepo
+.turbo
+
+# Claude Code
+/.claude
+
+# Tasks
+/tasks
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Temp
+tmp
+.tmp

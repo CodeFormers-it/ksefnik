@@ -4,6 +4,7 @@ import { registerSendCommand } from './commands/send.js'
 import { registerBankCommand } from './commands/bank.js'
 import { registerReconcileCommand } from './commands/reconcile.js'
 import { registerValidateCommand } from './commands/validate.js'
+import { registerMcpCommand } from './commands/mcp.js'
 
 export function createProgram(): Command {
   const program = new Command()
@@ -22,6 +23,7 @@ export function createProgram(): Command {
   registerBankCommand(program)
   registerReconcileCommand(program)
   registerValidateCommand(program)
+  registerMcpCommand(program)
 
   return program
 }

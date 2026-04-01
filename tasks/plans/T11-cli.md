@@ -31,7 +31,7 @@
 
 ---
 
-## T11.3 — Command: mcp, Interactive Mode & CLI Entry {#t113}
+## T11.3 — Command: mcp, Interactive Mode & CLI Entry {#t113} ✅
 
 **Pliki:**
 - `src/commands/mcp.ts` — `ksefnik mcp [--stdio]` — uruchom MCP server
