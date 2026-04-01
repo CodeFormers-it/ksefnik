@@ -68,7 +68,7 @@
 
 ---
 
-## T07.4 — Pass 450 (partial) & Pass 500 (proximity) {#t074}
+## T07.4 — Pass 450 (partial) & Pass 500 (proximity) {#t074} ✅
 
 **Pliki:**
 - `src/matching/passes/partial.pass.ts`
