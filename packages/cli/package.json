@@ -1,0 +1,28 @@
+{
+  "name": "@ksefnik/cli",
+  "version": "0.0.1",
+  "type": "module",
+  "bin": {
+    "ksefnik": "./dist/main.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "dev": "tsc --build --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ksefnik/core": "workspace:*",
+    "@ksefnik/mcp": "workspace:*",
+    "commander": "^13.1",
+    "@clack/prompts": "^0.10"
+  },
+  "devDependencies": {
+    "typescript": "^5.7"
+  }
+}

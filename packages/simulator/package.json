@@ -1,0 +1,23 @@
+{
+  "name": "@ksefnik/simulator",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "dev": "tsc --build --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ksefnik/shared": "workspace:*",
+    "@ksefnik/core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7"
+  }
+}

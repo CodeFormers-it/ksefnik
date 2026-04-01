@@ -50,7 +50,7 @@ Stwórz root monorepo z konfiguracją.
 
 ---
 
-## T01.3 — Package Shells: simulator, mcp, cli {#t013}
+## T01.3 — Package Shells: simulator, mcp, cli {#t013} ✅
 
 `packages/simulator/`:
 - `package.json` → name: `@ksefnik/simulator`, deps: `@ksefnik/shared`, `@ksefnik/core`

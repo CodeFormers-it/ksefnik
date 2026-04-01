@@ -1,0 +1,6 @@
+{
+  "name": "@ksefnik/build",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Bun compile pipeline (placeholder)"
+}
