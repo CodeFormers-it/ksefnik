@@ -51,7 +51,7 @@ Parallelizm: po T02 — T03+T04, T05, T06 mogą biec równolegle.
 - [ ] **T05 — @ksefnik/core: Bank Parsers & NIP Extraction** (4 subtaski)
   - [x] [T05.1 — NIP extractor & auto-detect](./plans/T05-bank-parsers.md#t051)
   - [x] [T05.2 — MT940 parser](./plans/T05-bank-parsers.md#t052)
-  - [ ] [T05.3 — CSV parsers: mBank + ING](./plans/T05-bank-parsers.md#t053)
+  - [x] [T05.3 — CSV parsers: mBank + ING](./plans/T05-bank-parsers.md#t053)
   - [ ] [T05.4 — CSV parsers: PKO + Santander & parser registry](./plans/T05-bank-parsers.md#t054)
 
 - [ ] **T06 — @ksefnik/core: Validation Engine** (2 subtaski)

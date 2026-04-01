@@ -43,7 +43,7 @@ Używa `mt940js`. Mapuje pola MT940 na `BankTransaction` schema:
 
 ---
 
-## T05.3 — CSV Parsers: mBank + ING {#t053}
+## T05.3 — CSV Parsers: mBank + ING {#t053} ✅
 
 **Pliki:**
 - `src/bank/parsers/csv-base.ts` — shared: encoding detection (Windows-1250/UTF-8), delimiter, row iteration
