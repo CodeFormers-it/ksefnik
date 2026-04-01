@@ -28,7 +28,7 @@
 
 ---
 
-## T05.2 — MT940 Parser {#t052}
+## T05.2 — MT940 Parser {#t052} ✅
 
 **Pliki:**
 - `src/bank/parsers/mt940.parser.ts`

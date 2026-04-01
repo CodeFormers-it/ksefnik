@@ -2,7 +2,7 @@ import { isValidNIP } from '@ksefnik/shared'
 
 const MPP_PATTERN = /\/NIP\/(\d{10})\//
 const IDC_PATTERN = /\/IDC\/(\d{10})\//
-const PREFIXED_PATTERN = /NIP[:\s]+(\d{10})/gi
+const PREFIXED_PATTERN = /NIP[:\s]*(\d{10})/gi
 const RAW_10_DIGIT = /\b(\d{10})\b/g
 
 export function extractNIPs(text: string): string[] {
