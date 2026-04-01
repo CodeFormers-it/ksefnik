@@ -92,7 +92,7 @@
 
 ---
 
-## T02.3 — Type Interfaces: Plugin, Pass, Parser, Adapter, Storage, Config {#t023}
+## T02.3 — Type Interfaces: Plugin, Pass, Parser, Adapter, Storage, Config {#t023} ✅
 
 **Pliki:**
 - `src/types/plugin.ts` — KsefPlugin interface
