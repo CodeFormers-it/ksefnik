@@ -30,7 +30,7 @@
 
 ---
 
-## T06.2 — Remaining 10 Rules & Validation Index {#t062}
+## T06.2 — Remaining 10 Rules & Validation Index {#t062} ✅
 
 **Pliki:**
 - 10 kolejnych plików reguł:

@@ -19,3 +19,9 @@ export {
   SantanderParser,
   getDefaultParsers,
 } from './bank/index.js'
+export {
+  validateInvoice,
+  validateInvoices,
+  allRules,
+} from './validation/index.js'
+export type { ValidationRule, ValidationResult, ValidationContext, ValidationReport } from './validation/index.js'

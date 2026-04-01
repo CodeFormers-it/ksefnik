@@ -54,9 +54,9 @@ Parallelizm: po T02 — T03+T04, T05, T06 mogą biec równolegle.
   - [x] [T05.3 — CSV parsers: mBank + ING](./plans/T05-bank-parsers.md#t053)
   - [x] [T05.4 — CSV parsers: PKO + Santander & parser registry](./plans/T05-bank-parsers.md#t054)
 
-- [ ] **T06 — @ksefnik/core: Validation Engine** (2 subtaski)
+- [x] **T06 — @ksefnik/core: Validation Engine** (2 subtaski)
   - [x] [T06.1 — Framework & first 10 rules](./plans/T06-validation.md#t061)
-  - [ ] [T06.2 — Remaining 10 rules & validation index](./plans/T06-validation.md#t062)
+  - [x] [T06.2 — Remaining 10 rules & validation index](./plans/T06-validation.md#t062)
 
 - [ ] **T07 — @ksefnik/core: Reconciliation Engine** (5 subtasków)
   - [ ] [T07.1 — Pipeline infrastructure & scoring](./plans/T07-reconciliation.md#t071)
