@@ -39,7 +39,7 @@ ksef.plugins.register(plugin)
 
 ---
 
-## T08.3 — Barrel Exports & Integration Tests {#t083}
+## T08.3 — Barrel Exports & Integration Tests {#t083} ✅
 
 **Pliki:**
 - Zaktualizuj `src/index.ts` — wszystkie publiczne eksporty

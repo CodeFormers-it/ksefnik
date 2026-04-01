@@ -65,10 +65,10 @@ Parallelizm: po T02 — T03+T04, T05, T06 mogą biec równolegle.
   - [x] [T07.4 — Pass 450 (partial) & Pass 500 (proximity)](./plans/T07-reconciliation.md#t074)
   - [x] [T07.5 — Pass registry & pipeline integration tests](./plans/T07-reconciliation.md#t075)
 
-- [ ] **T08 — @ksefnik/core: Facade, Plugins & Package Entry** (3 subtaski)
+- [x] **T08 — @ksefnik/core: Facade, Plugins & Package Entry** (3 subtaski)
   - [x] [T08.1 — Plugin system (loader + registry)](./plans/T08-facade-plugins.md#t081)
   - [x] [T08.2 — Ksefnik facade class + createKsefnik() factory](./plans/T08-facade-plugins.md#t082)
-  - [ ] [T08.3 — Core barrel exports & facade integration tests](./plans/T08-facade-plugins.md#t083)
+  - [x] [T08.3 — Core barrel exports & facade integration tests](./plans/T08-facade-plugins.md#t083)
 
 - [ ] **T09 — @ksefnik/simulator** (2 subtaski)
   - [ ] [T09.1 — Mock adapter & scenario infrastructure](./plans/T09-simulator.md#t091)
