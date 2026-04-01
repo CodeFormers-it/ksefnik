@@ -43,10 +43,10 @@ Parallelizm: po T02 — T03+T04, T05, T06 mogą biec równolegle.
   - [x] [T03.1 — In-memory storage](./plans/T03-storage.md#t031)
   - [x] [T03.2 — SQLite storage (bun:sqlite / better-sqlite3)](./plans/T03-storage.md#t032)
 
-- [ ] **T04 — @ksefnik/core: KSeF Adapter** (3 subtaski)
+- [x] **T04 — @ksefnik/core: KSeF Adapter** (3 subtaski)
   - [x] [T04.1 — Adapter implementation (wraps @ksef/client)](./plans/T04-ksef-adapter.md#t041)
   - [x] [T04.2 — Retry & exponential backoff](./plans/T04-ksef-adapter.md#t042)
-  - [ ] [T04.3 — Cache (TTL) & session management](./plans/T04-ksef-adapter.md#t043)
+  - [x] [T04.3 — Cache (TTL) & session management](./plans/T04-ksef-adapter.md#t043)
 
 - [ ] **T05 — @ksefnik/core: Bank Parsers & NIP Extraction** (4 subtaski)
   - [ ] [T05.1 — NIP extractor & auto-detect](./plans/T05-bank-parsers.md#t051)

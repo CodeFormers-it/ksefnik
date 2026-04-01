@@ -30,7 +30,7 @@ Jitter: `+ Math.random() * baseDelay * 0.1`
 
 ---
 
-## T04.3 — Cache & Session Management {#t043}
+## T04.3 — Cache & Session Management {#t043} ✅
 
 **Pliki:**
 - `src/ksef/cache.ts` — TTL-based in-memory cache, default 5min
