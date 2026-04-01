@@ -45,7 +45,7 @@ Parallelizm: po T02 — T03+T04, T05, T06 mogą biec równolegle.
 
 - [ ] **T04 — @ksefnik/core: KSeF Adapter** (3 subtaski)
   - [x] [T04.1 — Adapter implementation (wraps @ksef/client)](./plans/T04-ksef-adapter.md#t041)
-  - [ ] [T04.2 — Retry & exponential backoff](./plans/T04-ksef-adapter.md#t042)
+  - [x] [T04.2 — Retry & exponential backoff](./plans/T04-ksef-adapter.md#t042)
   - [ ] [T04.3 — Cache (TTL) & session management](./plans/T04-ksef-adapter.md#t043)
 
 - [ ] **T05 — @ksefnik/core: Bank Parsers & NIP Extraction** (4 subtaski)

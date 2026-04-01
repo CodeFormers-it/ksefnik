@@ -18,7 +18,7 @@ Bazowa implementacja bez retry/cache. Testy mockują @ksef/client.
 
 ---
 
-## T04.2 — Retry & Exponential Backoff {#t042}
+## T04.2 — Retry & Exponential Backoff {#t042} ✅
 
 **Pliki:**
 - `src/ksef/retry.ts` — generic `withRetry<T>(fn, opts)`
