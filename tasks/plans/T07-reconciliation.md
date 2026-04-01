@@ -27,7 +27,7 @@
 
 ---
 
-## T07.2 — Pass 100 (ksef-ref) & Pass 200 (exact) {#t072}
+## T07.2 — Pass 100 (ksef-ref) & Pass 200 (exact) {#t072} ✅
 
 **Pliki:**
 - `src/matching/passes/ksef-ref.pass.ts`

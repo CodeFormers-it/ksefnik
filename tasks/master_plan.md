@@ -60,7 +60,7 @@ Parallelizm: po T02 — T03+T04, T05, T06 mogą biec równolegle.
 
 - [ ] **T07 — @ksefnik/core: Reconciliation Engine** (5 subtasków)
   - [x] [T07.1 — Pipeline infrastructure & scoring](./plans/T07-reconciliation.md#t071)
-  - [ ] [T07.2 — Pass 100 (ksef-ref) & Pass 200 (exact)](./plans/T07-reconciliation.md#t072)
+  - [x] [T07.2 — Pass 100 (ksef-ref) & Pass 200 (exact)](./plans/T07-reconciliation.md#t072)
   - [ ] [T07.3 — Pass 300 (invoice-ref) & Pass 400 (fuzzy)](./plans/T07-reconciliation.md#t073)
   - [ ] [T07.4 — Pass 450 (partial) & Pass 500 (proximity)](./plans/T07-reconciliation.md#t074)
   - [ ] [T07.5 — Pass registry & pipeline integration tests](./plans/T07-reconciliation.md#t075)
