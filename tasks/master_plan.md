@@ -58,12 +58,12 @@ Parallelizm: po T02 — T03+T04, T05, T06 mogą biec równolegle.
   - [x] [T06.1 — Framework & first 10 rules](./plans/T06-validation.md#t061)
   - [x] [T06.2 — Remaining 10 rules & validation index](./plans/T06-validation.md#t062)
 
-- [ ] **T07 — @ksefnik/core: Reconciliation Engine** (5 subtasków)
+- [x] **T07 — @ksefnik/core: Reconciliation Engine** (5 subtasków)
   - [x] [T07.1 — Pipeline infrastructure & scoring](./plans/T07-reconciliation.md#t071)
   - [x] [T07.2 — Pass 100 (ksef-ref) & Pass 200 (exact)](./plans/T07-reconciliation.md#t072)
   - [x] [T07.3 — Pass 300 (invoice-ref) & Pass 400 (fuzzy)](./plans/T07-reconciliation.md#t073)
   - [x] [T07.4 — Pass 450 (partial) & Pass 500 (proximity)](./plans/T07-reconciliation.md#t074)
-  - [ ] [T07.5 — Pass registry & pipeline integration tests](./plans/T07-reconciliation.md#t075)
+  - [x] [T07.5 — Pass registry & pipeline integration tests](./plans/T07-reconciliation.md#t075)
 
 - [ ] **T08 — @ksefnik/core: Facade, Plugins & Package Entry** (3 subtaski)
   - [ ] [T08.1 — Plugin system (loader + registry)](./plans/T08-facade-plugins.md#t081)

@@ -25,3 +25,4 @@ export {
   allRules,
 } from './validation/index.js'
 export type { ValidationRule, ValidationResult, ValidationContext, ValidationReport } from './validation/index.js'
+export { runPipeline, defaultPasses } from './matching/index.js'

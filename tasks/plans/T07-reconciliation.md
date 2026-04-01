@@ -91,7 +91,7 @@
 
 ---
 
-## T07.5 — Pass Registry & Pipeline Integration Tests {#t075}
+## T07.5 — Pass Registry & Pipeline Integration Tests {#t075} ✅
 
 **Pliki:**
 - `src/matching/passes/index.ts` — eksportuje 6 passów jako ordered array
