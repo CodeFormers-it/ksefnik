@@ -152,7 +152,7 @@ interface Storage {
 
 ---
 
-## T02.4 — Typed Errors & Barrel Export {#t024}
+## T02.4 — Typed Errors & Barrel Export {#t024} ✅
 
 **Pliki:**
 - `src/errors/base.ts` — KsefnikError base class (code, message, context?)

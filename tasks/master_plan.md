@@ -33,11 +33,11 @@ Parallelizm: po T02 — T03+T04, T05, T06 mogą biec równolegle.
   - [x] [T01.3 — Package shells: simulator, mcp, cli](./plans/T01-scaffolding.md#t013)
   - [x] [T01.4 — Test fixtures & directories](./plans/T01-scaffolding.md#t014)
 
-- [ ] **T02 — @ksefnik/shared** (4 subtaski)
+- [x] **T02 — @ksefnik/shared** (4 subtaski)
   - [x] [T02.1 — Zod schemas: Invoice & BankTransaction](./plans/T02-shared.md#t021)
   - [x] [T02.2 — Zod schemas: Match & ReconciliationReport](./plans/T02-shared.md#t022)
   - [x] [T02.3 — Type interfaces: Plugin, Pass, Parser, Adapter, Storage, Config](./plans/T02-shared.md#t023)
-  - [ ] [T02.4 — Typed errors & barrel export](./plans/T02-shared.md#t024)
+  - [x] [T02.4 — Typed errors & barrel export](./plans/T02-shared.md#t024)
 
 - [ ] **T03 — @ksefnik/core: Storage Layer** (2 subtaski)
   - [ ] [T03.1 — In-memory storage](./plans/T03-storage.md#t031)
