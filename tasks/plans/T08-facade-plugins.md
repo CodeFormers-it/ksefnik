@@ -5,7 +5,7 @@
 
 ---
 
-## T08.1 — Plugin System {#t081}
+## T08.1 — Plugin System {#t081} ✅
 
 **Pliki:**
 - `src/plugins/loader.ts` — `loadPlugin(name): Promise<KsefPlugin | null>` via dynamic import + try/catch
