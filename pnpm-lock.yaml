@@ -72,9 +72,15 @@ importers:
       '@ksefnik/core':
         specifier: workspace:*
         version: link:../core
+      '@ksefnik/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@modelcontextprotocol/sdk':
         specifier: ^1.12
         version: 1.29.0(zod@3.25.76)
+      zod:
+        specifier: ^3.24
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^5.7

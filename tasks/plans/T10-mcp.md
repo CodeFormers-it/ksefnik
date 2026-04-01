@@ -20,7 +20,7 @@ Każdy tool: 5-15 linii. Parse input z Zod → delegate do Ksefnik facade → re
 
 ---
 
-## T10.2 — Remaining 4 Tools & Package Entry {#t102}
+## T10.2 — Remaining 4 Tools & Package Entry {#t102} ✅
 
 **Pliki:**
 - `src/tools/query-invoices.ts` — filter by NIP, amount, date
