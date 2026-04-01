@@ -6,7 +6,7 @@
 
 ---
 
-## T04.1 — Adapter Implementation {#t041}
+## T04.1 — Adapter Implementation {#t041} ✅
 
 **Pliki:**
 - `src/ksef/ksef.adapter.ts` — wraps @ksef/client, implements KsefAdapter
