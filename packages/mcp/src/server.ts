@@ -15,42 +15,65 @@ export function createMcpServer(ksef: Ksefnik): McpServer {
     version: '0.0.1',
   })
 
-  server.tool('sync-invoices', syncInvoicesSchema.shape, async (input) => {
+  server.registerTool('sync-invoices', {
+    description: 'Fetch invoices from KSeF for a given date range',
+    inputSchema: syncInvoicesSchema.shape,
+  }, async (input) => {
     const result = await syncInvoices(ksef, input)
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
   })
 
-  server.tool('import-bank', importBankSchema.shape, async (input) => {
+  server.registerTool('import-bank', {
+    description: 'Import bank statement content (auto-detects format)',
+    inputSchema: importBankSchema.shape,
+  }, async (input) => {
     const result = await importBank(ksef, input)
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
   })
 
-  server.tool('reconcile', {}, async () => {
+  server.registerTool('reconcile', {
+    description: 'Run reconciliation pipeline on stored invoices and transactions',
+  }, async () => {
     const result = await reconcile(ksef)
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
   })
 
-  server.tool('get-unmatched', getUnmatchedSchema.shape, async (input) => {
+  server.registerTool('get-unmatched', {
+    description: 'Get unmatched invoices and transactions from a reconciliation report',
+    inputSchema: getUnmatchedSchema.shape,
+  }, async (input) => {
     const result = await getUnmatched(ksef, input)
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
   })
 
-  server.tool('query-invoices', queryInvoicesSchema.shape, async (input) => {
+  server.registerTool('query-invoices', {
+    description: 'Query stored invoices by NIP, date range, or invoice number',
+    inputSchema: queryInvoicesSchema.shape,
+  }, async (input) => {
     const result = await queryInvoices(ksef, input)
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
   })
 
-  server.tool('send-invoice', sendInvoiceSchema.shape, async (input) => {
+  server.registerTool('send-invoice', {
+    description: 'Send invoice XML to KSeF',
+    inputSchema: sendInvoiceSchema.shape,
+  }, async (input) => {
     const result = await sendInvoiceTool(ksef, input)
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
   })
 
-  server.tool('validate-invoice', validateInvoiceSchema.shape, async (input) => {
+  server.registerTool('validate-invoice', {
+    description: 'Validate an invoice against 20 Polish tax rules',
+    inputSchema: validateInvoiceSchema.shape,
+  }, async (input) => {
     const result = validateInvoiceTool(ksef, input)
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
   })
 
-  server.tool('confirm-match', confirmMatchSchema.shape, async (input) => {
+  server.registerTool('confirm-match', {
+    description: 'Confirm or reject a reconciliation match',
+    inputSchema: confirmMatchSchema.shape,
+  }, async (input) => {
     const result = confirmMatch(input)
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
   })
