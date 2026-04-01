@@ -6,7 +6,7 @@
 
 ---
 
-## T11.1 — CLI Framework & Commands: fetch, send {#t111}
+## T11.1 — CLI Framework & Commands: fetch, send {#t111} ✅
 
 **Pliki:**
 - `src/main.ts` — Commander.js program, global options: --nip, --env, --token, --debug

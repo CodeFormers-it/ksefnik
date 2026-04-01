@@ -31,6 +31,9 @@ importers:
       '@ksefnik/mcp':
         specifier: workspace:*
         version: link:../mcp
+      '@ksefnik/shared':
+        specifier: workspace:*
+        version: link:../shared
       commander:
         specifier: ^13.1
         version: 13.1.0

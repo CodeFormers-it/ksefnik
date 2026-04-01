@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ksefnik/shared": "workspace:*",
     "@ksefnik/core": "workspace:*",
     "@ksefnik/mcp": "workspace:*",
     "commander": "^13.1",

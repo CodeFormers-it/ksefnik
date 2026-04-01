@@ -1,1 +1,1 @@
-export {}
+export { createProgram } from './main.js'
