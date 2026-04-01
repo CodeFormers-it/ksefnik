@@ -5,7 +5,7 @@
 
 ---
 
-## T06.1 — Framework & First 10 Rules {#t061}
+## T06.1 — Framework & First 10 Rules {#t061} ✅
 
 **Pliki:**
 - `src/validation/rule.ts` — ValidationRule interface
