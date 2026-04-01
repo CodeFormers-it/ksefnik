@@ -6,7 +6,7 @@
 
 ---
 
-## T07.1 — Pipeline Infrastructure & Scoring {#t071}
+## T07.1 — Pipeline Infrastructure & Scoring {#t071} ✅
 
 **Pliki:**
 - `src/matching/pipeline.ts` — orkiestracja passów
