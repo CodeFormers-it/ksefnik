@@ -10,7 +10,8 @@
     "build": "pnpm -r build",
     "test": "vitest",
     "typecheck": "pnpm -r typecheck",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "build:binary": "node apps/build/build.ts"
   },
   "devDependencies": {
     "vitest": "^3.2",

@@ -21,7 +21,7 @@
 
 ---
 
-## T12.2 — Demo Example & Documentation {#t122}
+## T12.2 — Demo Example & Documentation {#t122} ✅
 
 **Pliki:**
 - `examples/demo/index.ts` — 15-20 linii: "aha moment" z simulator
@@ -34,7 +34,7 @@ Demo musi działać z jedną komendą: `npx tsx examples/demo/index.ts`
 
 ---
 
-## T12.3 — Build Pipeline & Binary Compilation {#t123}
+## T12.3 — Build Pipeline & Binary Compilation {#t123} ✅
 
 **Pliki:**
 - `apps/build/build.ts` — bun build --compile dla CLI binary

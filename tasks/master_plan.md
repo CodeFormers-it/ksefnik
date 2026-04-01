@@ -83,7 +83,7 @@ Parallelizm: po T02 — T03+T04, T05, T06 mogą biec równolegle.
   - [x] [T11.2 — Commands: bank, reconcile, validate](./plans/T11-cli.md#t112)
   - [x] [T11.3 — Command: mcp, interactive mode & CLI entry](./plans/T11-cli.md#t113)
 
-- [ ] **T12 — Integration Tests, Examples & Build** (3 subtaski)
+- [x] **T12 — Integration Tests, Examples & Build** (3 subtaski)
   - [x] [T12.1 — End-to-end integration tests](./plans/T12-integration.md#t121)
-  - [ ] [T12.2 — Demo example & documentation](./plans/T12-integration.md#t122)
-  - [ ] [T12.3 — Build pipeline & binary compilation](./plans/T12-integration.md#t123)
+  - [x] [T12.2 — Demo example & documentation](./plans/T12-integration.md#t122)
+  - [x] [T12.3 — Build pipeline & binary compilation](./plans/T12-integration.md#t123)

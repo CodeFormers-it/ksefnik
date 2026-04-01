@@ -1,0 +1,16 @@
+{
+  "name": "@ksefnik/demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx index.ts"
+  },
+  "dependencies": {
+    "@ksefnik/core": "workspace:*",
+    "@ksefnik/simulator": "workspace:*",
+    "@ksefnik/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19"
+  }
+}
