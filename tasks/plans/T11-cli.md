@@ -19,7 +19,7 @@
 
 ---
 
-## T11.2 — Commands: bank, reconcile, validate {#t112}
+## T11.2 — Commands: bank, reconcile, validate {#t112} ✅
 
 **Pliki:**
 - `src/commands/bank.ts` — `ksefnik bank import <file> [--format auto|mt940|csv]`

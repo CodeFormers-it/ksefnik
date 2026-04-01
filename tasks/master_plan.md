@@ -80,7 +80,7 @@ Parallelizm: po T02 — T03+T04, T05, T06 mogą biec równolegle.
 
 - [ ] **T11 — @ksefnik/cli** (3 subtaski)
   - [x] [T11.1 — CLI framework & commands: fetch, send](./plans/T11-cli.md#t111)
-  - [ ] [T11.2 — Commands: bank, reconcile, validate](./plans/T11-cli.md#t112)
+  - [x] [T11.2 — Commands: bank, reconcile, validate](./plans/T11-cli.md#t112)
   - [ ] [T11.3 — Command: mcp, interactive mode & CLI entry](./plans/T11-cli.md#t113)
 
 - [ ] **T12 — Integration Tests, Examples & Build** (3 subtaski)

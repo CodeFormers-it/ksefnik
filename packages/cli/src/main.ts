@@ -1,6 +1,9 @@
 import { Command } from 'commander'
 import { registerFetchCommand } from './commands/fetch.js'
 import { registerSendCommand } from './commands/send.js'
+import { registerBankCommand } from './commands/bank.js'
+import { registerReconcileCommand } from './commands/reconcile.js'
+import { registerValidateCommand } from './commands/validate.js'
 
 export function createProgram(): Command {
   const program = new Command()
@@ -16,6 +19,9 @@ export function createProgram(): Command {
 
   registerFetchCommand(program)
   registerSendCommand(program)
+  registerBankCommand(program)
+  registerReconcileCommand(program)
+  registerValidateCommand(program)
 
   return program
 }
