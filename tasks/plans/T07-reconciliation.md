@@ -47,7 +47,7 @@
 
 ---
 
-## T07.3 — Pass 300 (invoice-ref) & Pass 400 (fuzzy) {#t073}
+## T07.3 — Pass 300 (invoice-ref) & Pass 400 (fuzzy) {#t073} ✅
 
 **Pliki:**
 - `src/matching/passes/invoice-ref.pass.ts`
