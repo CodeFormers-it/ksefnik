@@ -1,0 +1,5 @@
+"Data operacji","Data waluty","Typ transakcji","Kwota","Waluta","Saldo po transakcji","Opis nadawcy","Tytuł","NIP"
+"2026-03-01","2026-03-01","Przelew z rachunku",-1230.00,"PLN",48770.00,"TECHSOLUTIONS SP Z OO","FV/2026/03/001","5213456784"
+"2026-03-03","2026-03-03","Przelew na rachunek",15000.00,"PLN",63770.00,"BUDIMEX SA","FV/2026/03/002 roboty budowlane","5261003187"
+"2026-03-10","2026-03-10","Przelew z rachunku",-7800.00,"PLN",55970.00,"CLOUDWARE SP Z OO","FV/2026/03/003 uslugi IT","8971234561"
+"2026-03-15","2026-03-15","Przelew na rachunek",22500.00,"PLN",78470.00,"ORLEN SA","FV/2026/03/005 KSeF:1234567890-20260315-ABC123DEF456","7740001454"

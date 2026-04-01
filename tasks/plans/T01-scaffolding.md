@@ -72,7 +72,7 @@ Stwórz root monorepo z konfiguracją.
 
 ---
 
-## T01.4 — Test Fixtures & Directories {#t014}
+## T01.4 — Test Fixtures & Directories {#t014} ✅
 
 **Pliki do stworzenia:**
 - `tests/fixtures/mt940/sample.mt940` — valid MT940 z 5-10 transakcjami (PLN, polskie banki)
