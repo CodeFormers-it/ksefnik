@@ -1,0 +1,15 @@
+{
+  "name": "ksefnik",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm -r dev",
+    "build": "pnpm -r build",
+    "test": "vitest",
+    "typecheck": "pnpm -r typecheck",
+    "format": "prettier --write ."
+  }
+}
