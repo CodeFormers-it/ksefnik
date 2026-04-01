@@ -67,7 +67,7 @@ Parallelizm: po T02 — T03+T04, T05, T06 mogą biec równolegle.
 
 - [ ] **T08 — @ksefnik/core: Facade, Plugins & Package Entry** (3 subtaski)
   - [x] [T08.1 — Plugin system (loader + registry)](./plans/T08-facade-plugins.md#t081)
-  - [ ] [T08.2 — Ksefnik facade class + createKsefnik() factory](./plans/T08-facade-plugins.md#t082)
+  - [x] [T08.2 — Ksefnik facade class + createKsefnik() factory](./plans/T08-facade-plugins.md#t082)
   - [ ] [T08.3 — Core barrel exports & facade integration tests](./plans/T08-facade-plugins.md#t083)
 
 - [ ] **T09 — @ksefnik/simulator** (2 subtaski)

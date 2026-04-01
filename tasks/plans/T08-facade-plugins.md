@@ -18,7 +18,7 @@ Registry: merguje passy (core 100-500 + plugin 600+), parsery, validators.
 
 ---
 
-## T08.2 — Ksefnik Facade {#t082}
+## T08.2 — Ksefnik Facade {#t082} ✅
 
 **Pliki:**
 - `src/ksefnik.ts` — Ksefnik class z namespace'ami: invoices, bank, reconciliation, plugins
