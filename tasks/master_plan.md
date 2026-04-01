@@ -29,7 +29,7 @@ Parallelizm: po T02 — T03+T04, T05, T06 mogą biec równolegle.
 
 - [ ] **T01 — Monorepo Scaffolding & Configuration** (4 subtaski)
   - [x] [T01.1 — Root config files](./plans/T01-scaffolding.md#t011)
-  - [ ] [T01.2 — Package shells: shared + core](./plans/T01-scaffolding.md#t012)
+  - [x] [T01.2 — Package shells: shared + core](./plans/T01-scaffolding.md#t012)
   - [ ] [T01.3 — Package shells: simulator, mcp, cli](./plans/T01-scaffolding.md#t013)
   - [ ] [T01.4 — Test fixtures & directories](./plans/T01-scaffolding.md#t014)
 

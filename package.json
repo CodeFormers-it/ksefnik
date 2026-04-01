@@ -11,5 +11,10 @@
     "test": "vitest",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "vitest": "^3.2",
+    "typescript": "^5.7",
+    "prettier": "^3.4"
   }
 }

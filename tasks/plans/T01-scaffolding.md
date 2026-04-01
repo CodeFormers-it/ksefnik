@@ -31,7 +31,7 @@ Stwórz root monorepo z konfiguracją.
 
 ---
 
-## T01.2 — Package Shells: shared + core {#t012}
+## T01.2 — Package Shells: shared + core {#t012} ✅
 
 **Pliki do stworzenia (per pakiet):**
 
