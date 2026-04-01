@@ -57,7 +57,7 @@ csv-base: obsługuje encoding (polskie znaki!), delimiter (`;` vs `,`), BOM.
 
 ---
 
-## T05.4 — CSV Parsers: PKO + Santander & Parser Registry {#t054}
+## T05.4 — CSV Parsers: PKO + Santander & Parser Registry {#t054} ✅
 
 **Pliki:**
 - `src/bank/parsers/pko.parser.ts`
