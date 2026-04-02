@@ -8,6 +8,11 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'ksefnik',
+      logo: {
+        src: './src/assets/ksefnik-logo.png',
+        alt: 'ksefnik',
+        replacesTitle: true,
+      },
       defaultLocale: 'root',
       locales: {
         root: { label: 'Polski', lang: 'pl' },
