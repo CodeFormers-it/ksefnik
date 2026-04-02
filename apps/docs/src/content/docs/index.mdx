@@ -267,11 +267,7 @@ hero:
   }
 `}</style>
 
-## Szybki przykład
-
-<div class="code-columns">
-  <div class="code-col">
-    <div class="code-col__label">⚡ SDK (TypeScript)</div>
+## ⚡ SDK (TypeScript)
 
 ```typescript
 import { createKsefnik } from '@ksefnik/core'
@@ -288,15 +284,11 @@ const ksef = createKsefnik({
 })
 
 const txs = await ksef.bank.importFromString(csv)
-const report = await ksef.reconciliation.run(
-  invoices, txs
-)
+const report = await ksef.reconciliation.run(invoices, txs)
 // → matchedCount: 10, confidence: 95%
 ```
 
-  </div>
-  <div class="code-col">
-    <div class="code-col__label">🤖 MCP (Claude Code)</div>
+## 🤖 MCP (Claude Code)
 
 ```bash
 # Dodaj ksefnik do Claude Code
@@ -317,28 +309,3 @@ Claude: Zaimportowałem 15 transakcji z mBanku.
         • FV/2026/03/018 — 1 230 PLN (TechSoft)
         • FV/2026/03/021 — 8 900 PLN (DataCorp)
 ```
-
-  </div>
-</div>
-
-<style>{`
-  .code-columns {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    margin: 1.5rem 0;
-    max-width: 52rem;
-  }
-  @media (max-width: 50rem) {
-    .code-columns { grid-template-columns: 1fr; }
-  }
-  .code-col {
-    min-width: 0;
-  }
-  .code-col__label {
-    font-size: 0.8rem;
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-    letter-spacing: 0.02em;
-  }
-`}</style>
