@@ -296,28 +296,26 @@ const report = await ksef.reconciliation.run(
 
   </div>
   <div class="code-col">
-    <div class="code-col__label">🤖 MCP (Claude / Cursor)</div>
+    <div class="code-col__label">🤖 MCP (Claude Code)</div>
 
-```json
-// 1. Importuj wyciąg bankowy
-{
-  "tool": "import-bank",
-  "input": { "content": "...csv..." }
-}
-// → { "count": 15, "transactions": [...] }
+```bash
+# Dodaj ksefnik do Claude Code
+claude mcp add ksefnik -- \
+  pnpm dlx tsx packages/cli/src/main.ts mcp --stdio
+```
 
-// 2. Uruchom uzgadnianie
-{
-  "tool": "reconcile"
-}
-// → { "matchedCount": 10,
-//      "unmatchedInvoiceCount": 2 }
+```
+> Ty: Zaimportuj wyciąg z pliku wyciag-mbank.csv
+>     i sprawdź które faktury nie mają przelewu.
 
-// 3. Sprawdź niesparowane
-{
-  "tool": "get-unmatched",
-  "input": { "reportId": "abc-123" }
-}
+Claude: Zaimportowałem 15 transakcji z mBanku.
+        Po uzgadnianiu 12 faktur ma dopasowany
+        przelew (średnia pewność 93%).
+
+        3 faktury bez przelewu:
+        • FV/2026/03/012 — 4 500 PLN (ACME sp. z o.o.)
+        • FV/2026/03/018 — 1 230 PLN (TechSoft)
+        • FV/2026/03/021 — 8 900 PLN (DataCorp)
 ```
 
   </div>
