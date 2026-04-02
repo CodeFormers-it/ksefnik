@@ -22,6 +22,7 @@ export default defineConfig({
       ],
       components: {
         SiteTitle: './src/components/overrides/SiteTitle.astro',
+        SocialIcons: './src/components/overrides/SocialIcons.astro',
       },
       customCss: ['./src/styles/custom.css'],
       sidebar: [
