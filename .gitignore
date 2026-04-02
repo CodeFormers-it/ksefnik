@@ -44,3 +44,6 @@ pnpm-debug.log*
 # Temp
 tmp
 .tmp
+
+# Pro docs (symlinked locally, merged in CI)
+apps/docs/src/content/docs/integracje

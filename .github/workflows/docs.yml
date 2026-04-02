@@ -1,18 +1,17 @@
 name: Deploy Docs
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/docs/**'
-      - 'packages/shared/src/schemas/**'
   pull_request:
     paths:
       - 'apps/docs/**'
+      - 'packages/shared/src/schemas/**'
+  workflow_dispatch: # Triggered by ksefnik-pro when pro docs change
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      PRO_REPO_TOKEN: ${{ secrets.PRO_REPO_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
