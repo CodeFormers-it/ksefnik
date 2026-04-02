@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://ksefnik.pl/">
-    <img src="assets/ksefnik-logo.png" alt="ksefnik" width="380" />
+    <img src="assets/ksefnik.webp" alt="ksefnik" width="220" />
   </a>
   &nbsp;&nbsp;&nbsp;
   <a href="https://codeformers.it/">
