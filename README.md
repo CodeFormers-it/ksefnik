@@ -1,10 +1,12 @@
 <p align="center">
+  <a href="https://ksefnik.pl/">
+    <img src="assets/ksefnik-logo.png" alt="ksefnik" width="380" />
+  </a>
+  &nbsp;&nbsp;&nbsp;
   <a href="https://codeformers.it/">
-    <img src="assets/codeformers-github.png" alt="CodeFormers.it" width="420" />
+    <img src="assets/codeformers-github.png" alt="CodeFormers.it" width="280" />
   </a>
 </p>
-
-<h1 align="center">Ksefnik</h1>
 
 <p align="center">
   TypeScript SDK do reconcyliacji faktur z Krajowego Systemu e-Faktur (KSeF) z wyciagami bankowymi.
