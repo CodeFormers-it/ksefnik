@@ -20,22 +20,102 @@ hero:
       variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components'
+<div class="features-grid">
+  <a href="/silnik-uzgadniania/jak-dziala-pipeline/" class="feature-card feature-card--pipeline">
+    <div class="feature-card__bg"></div>
+    <div class="feature-card__content">
+      <h3>Silnik uzgadniania</h3>
+      <p>6-etapowy pipeline dopasowania faktur do przelewów — od pewnego dopasowania po numerze KSeF, przez NIP i numer faktury, aż po fuzzy matching i proximity. Każdy krok raportuje confidence score.</p>
+    </div>
+  </a>
+  <a href="/parsery-bankowe/obslugiwane-formaty/" class="feature-card feature-card--parsers">
+    <div class="feature-card__bg"></div>
+    <div class="feature-card__content">
+      <h3>Parsery bankowe</h3>
+      <p>MT940, mBank CSV, ING CSV, PKO BP CSV, Santander CSV — z automatyczną detekcją formatu. Wystarczy podać plik, ksefnik rozpozna bank i sparsuje transakcje.</p>
+    </div>
+  </a>
+  <a href="/walidacja/mechanizm/" class="feature-card feature-card--validation">
+    <div class="feature-card__bg"></div>
+    <div class="feature-card__content">
+      <h3>20 reguł walidacji</h3>
+      <p>Walidacja NIP (checksum), kwot (brutto/netto/VAT), dat (wystawienie, termin), duplikatów i spójności danych. Gotowe raporty z listą błędów.</p>
+    </div>
+  </a>
+  <a href="/mcp/konfiguracja/" class="feature-card feature-card--mcp">
+    <div class="feature-card__bg"></div>
+    <div class="feature-card__content">
+      <h3>Serwer MCP</h3>
+      <p>8 narzędzi dla asystentów AI — Claude, Cursor, Windsurf. Synchronizuj faktury, importuj wyciągi, uzgadniaj i waliduj bezpośrednio z poziomu AI.</p>
+    </div>
+  </a>
+</div>
 
-<CardGrid>
-  <Card title="Silnik uzgadniania" icon="rocket">
-    6-etapowy pipeline dopasowania faktur do przelewów — od pewnego dopasowania po numerze KSeF, przez NIP i numer faktury, aż po fuzzy matching i proximity. Każdy krok raportuje confidence score.
-  </Card>
-  <Card title="Parsery bankowe" icon="document">
-    MT940, mBank CSV, ING CSV, PKO BP CSV, Santander CSV — z automatyczną detekcją formatu. Wystarczy podać plik, ksefnik rozpozna bank i sparsuje transakcje.
-  </Card>
-  <Card title="20 reguł walidacji" icon="approve-check-circle">
-    Walidacja NIP (checksum + GUS), kwot (brutto/netto/VAT), dat (wystawienie, sprzedaż, termin), duplikatów i spójności danych. Raporty z severity: error, warning, info.
-  </Card>
-  <Card title="Serwer MCP" icon="star">
-    8 narzędzi dla asystentów AI — Claude, Cursor, Windsurf. Synchronizuj faktury, importuj wyciągi, uzgadniaj i waliduj bezpośrednio z poziomu AI. Zero konfiguracji.
-  </Card>
-</CardGrid>
+<style>{`
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin: 2rem 0;
+    max-width: 48rem;
+  }
+  @media (max-width: 50rem) {
+    .features-grid { grid-template-columns: 1fr; }
+  }
+  .feature-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+    border: 1px solid var(--sl-color-gray-5);
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.2s, transform 0.2s;
+    display: block;
+  }
+  .feature-card:hover {
+    border-color: var(--sl-color-accent);
+    transform: translateY(-2px);
+  }
+  .feature-card__bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    opacity: 0.08;
+    transition: opacity 0.3s;
+  }
+  .feature-card:hover .feature-card__bg {
+    opacity: 0.14;
+  }
+  .feature-card--pipeline .feature-card__bg {
+    background-image: url('/cards/pipeline.jpg');
+  }
+  .feature-card--parsers .feature-card__bg {
+    background-image: url('/cards/parsers.jpg');
+  }
+  .feature-card--validation .feature-card__bg {
+    background-image: url('/cards/validation.jpg');
+  }
+  .feature-card--mcp .feature-card__bg {
+    background-image: url('/cards/mcp.jpg');
+  }
+  .feature-card__content {
+    position: relative;
+    padding: 1.25rem;
+  }
+  .feature-card__content h3 {
+    margin: 0 0 0.5rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--sl-color-text-accent);
+  }
+  .feature-card__content p {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--sl-color-gray-2);
+  }
+`}</style>
 
 ## Szybki przykład
 
