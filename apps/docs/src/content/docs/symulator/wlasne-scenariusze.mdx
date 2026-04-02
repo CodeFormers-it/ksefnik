@@ -1,0 +1,128 @@
+---
+title: Własne scenariusze
+description: Jak tworzyć własne scenariusze symulatora KSeF.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Wbudowane scenariusze pokrywają najczęstsze przypadki, ale możesz stworzyć własny scenariusz z dowolną logiką. Wystarczy zdefiniować obiekt implementujący `ScenarioHooks`.
+
+## Interfejs ScenarioHooks
+
+```ts
+interface ScenarioHooks {
+  beforeFetch?: (params: FetchParams) => void | Promise<void>
+  beforeSend?: (params: SendParams) => void | Promise<void>
+  beforeGetUpo?: (reference: string) =>
+    | UpoResult
+    | void
+    | Promise<UpoResult | void>
+}
+```
+
+Każdy hook jest opcjonalny. Jeśli hook:
+- **rzuci błąd** -- operacja zostanie przerwana z tym błędem
+- **zwróci wartość** (tylko `beforeGetUpo`) -- ta wartość zastąpi domyślną odpowiedź
+- **nie zwróci niczego** -- operacja wykona się normalnie
+
+## MockKsefAdapter
+
+Pod spodem `createKsefSimulator` tworzy `MockKsefAdapter` z podanymi hookami:
+
+```ts
+import { MockKsefAdapter, InvoiceStore } from '@ksefnik/simulator'
+
+const store = new InvoiceStore()
+const adapter = new MockKsefAdapter(store, hooks)
+```
+
+Możesz użyć tej klasy bezpośrednio, jeśli potrzebujesz pełnej kontroli.
+
+## Przykład: rate-limiting (429)
+
+Scenariusz, w którym co trzecie zapytanie zwraca błąd HTTP 429 (Too Many Requests):
+
+```ts
+import { createKsefSimulator } from '@ksefnik/simulator'
+import { KsefApiError } from '@ksefnik/shared'
+import type { ScenarioHooks } from '@ksefnik/simulator'
+
+let requestCount = 0
+
+const rateLimitHooks: ScenarioHooks = {
+  beforeFetch: () => {
+    requestCount++
+    if (requestCount % 3 === 0) {
+      throw new KsefApiError(429, 'RATE_LIMIT', 'Too many requests')
+    }
+  },
+  beforeSend: () => {
+    requestCount++
+    if (requestCount % 3 === 0) {
+      throw new KsefApiError(429, 'RATE_LIMIT', 'Too many requests')
+    }
+  },
+}
+
+const { adapter, store } = createKsefSimulator({
+  scenario: 'custom',
+  hooks: rateLimitHooks,
+})
+```
+
+## Composable: łączenie hooków
+
+Możesz łączyć wiele zestawów hooków w jeden za pomocą prostej funkcji compose:
+
+```ts
+function composeHooks(...hookSets: ScenarioHooks[]): ScenarioHooks {
+  return {
+    beforeFetch: async (params) => {
+      for (const hooks of hookSets) {
+        await hooks.beforeFetch?.(params)
+      }
+    },
+    beforeSend: async (params) => {
+      for (const hooks of hookSets) {
+        await hooks.beforeSend?.(params)
+      }
+    },
+    beforeGetUpo: async (ref) => {
+      for (const hooks of hookSets) {
+        const result = await hooks.beforeGetUpo?.(ref)
+        if (result) return result
+      }
+    },
+  }
+}
+
+// Użycie: timeout na fetch + UPO delay
+const combined = composeHooks(timeoutOnlyFetch, upoDelayHooks)
+
+const { adapter } = createKsefSimulator({
+  scenario: 'custom',
+  hooks: combined,
+})
+```
+
+<Aside type="caution">
+Przy łączeniu hooków kolejność ma znaczenie. Hooki wykonywane są sekwencyjnie -- pierwszy, który rzuci błąd, przerywa łańcuch.
+</Aside>
+
+## Przykład: losowe błędy
+
+Scenariusz przydatny do testów odporności -- losowo wybiera między sukcesem a błędem:
+
+```ts
+const chaosHooks: ScenarioHooks = {
+  beforeFetch: () => {
+    if (Math.random() < 0.3) {
+      throw new KsefApiError(500, 'INTERNAL', 'Random failure')
+    }
+  },
+}
+```
+
+<Aside>
+Własne scenariusze nie są ograniczone do hooków. Możesz również manipulować `InvoiceStore` bezpośrednio, np. dodając lub usuwając faktury w trakcie testu.
+</Aside>

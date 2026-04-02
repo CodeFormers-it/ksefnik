@@ -1,0 +1,186 @@
+---
+title: Walidacja faktur
+description: Jak walidować faktury przed wysłaniem do KSeF.
+---
+
+import { Tabs, TabItem, Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components';
+
+Moduł `validation` sprawdza faktury pod kątem 20 najczęstszych reguł walidacyjnych KSeF. Wykrywa błędy, zanim wyślesz dokumenty do systemu — oszczędzasz czas i unikasz odrzuceń.
+
+## 20 reguł walidacji
+
+Reguły podzielone na 4 grupy:
+
+### NIP (5 reguł)
+
+| Reguła | Opis | Pole | Przykład błędu |
+|--------|------|------|----------------|
+| `nip-seller-required` | NIP sprzedawcy jest wymagany | `sellerNip` | Brak NIP sprzedawcy |
+| `nip-seller-checksum` | NIP sprzedawcy ma poprawną sumę kontrolną | `sellerNip` | NIP `1234567890` — niepoprawna suma kontrolna |
+| `nip-buyer-required` | NIP nabywcy jest wymagany (dla faktur krajowych) | `buyerNip` | Brak NIP nabywcy |
+| `nip-buyer-checksum` | NIP nabywcy ma poprawną sumę kontrolną | `buyerNip` | NIP `9999999999` — niepoprawna suma kontrolna |
+| `nip-seller-buyer-different` | NIP sprzedawcy i nabywcy są różne | `sellerNip`, `buyerNip` | Sprzedawca i nabywca mają ten sam NIP |
+
+### Kwoty (4 reguły)
+
+| Reguła | Opis | Pole | Przykład błędu |
+|--------|------|------|----------------|
+| `amount-gross-positive` | Kwota brutto jest dodatnia | `grossAmount` | Kwota brutto: `0` gr |
+| `amount-net-positive` | Kwota netto jest dodatnia | `netAmount` | Kwota netto: `-10000` gr |
+| `amount-vat-consistent` | VAT = brutto - netto | `vatAmount` | VAT `2300` gr nie zgadza się z brutto `12300` - netto `9000` = `3300` |
+| `amount-gross-gte-net` | Kwota brutto >= netto | `grossAmount`, `netAmount` | Brutto `10000` gr < netto `12000` gr |
+
+### Daty (4 reguły)
+
+| Reguła | Opis | Pole | Przykład błędu |
+|--------|------|------|----------------|
+| `date-issue-required` | Data wystawienia jest wymagana | `issueDate` | Brak daty wystawienia |
+| `date-issue-not-future` | Data wystawienia nie jest z przyszłości | `issueDate` | Data wystawienia `2027-01-01` jest w przyszłości |
+| `date-sale-not-after-issue` | Data sprzedaży nie jest po dacie wystawienia | `saleDate`, `issueDate` | Data sprzedaży `2026-04-01` jest po dacie wystawienia `2026-03-15` |
+| `date-sale-reasonable-range` | Data sprzedaży w rozsądnym zakresie (max 60 dni przed wystawieniem) | `saleDate` | Data sprzedaży `2025-12-01` — ponad 60 dni przed wystawieniem |
+
+### Inne (7 reguł)
+
+| Reguła | Opis | Pole | Przykład błędu |
+|--------|------|------|----------------|
+| `number-required` | Numer faktury jest wymagany | `number` | Brak numeru faktury |
+| `number-format` | Numer faktury nie jest pusty i ma max 256 znaków | `number` | Numer faktury przekracza 256 znaków |
+| `currency-valid` | Kod waluty jest poprawny (ISO 4217) | `currency` | Nieznana waluta: `XYZ` |
+| `currency-pln-default` | Faktury krajowe powinny być w PLN | `currency` | Faktura krajowa w walucie `EUR` |
+| `vat-rate-valid` | Stawka VAT jest poprawna (23%, 8%, 5%, 0%, zw, np, oo) | `vatRate` | Nieznana stawka VAT: `10%` |
+| `seller-name-required` | Nazwa sprzedawcy jest wymagana | `sellerName` | Brak nazwy sprzedawcy |
+| `buyer-name-required` | Nazwa nabywcy jest wymagana | `buyerName` | Brak nazwy nabywcy |
+
+## Uruchamianie walidacji
+
+<Tabs>
+  <TabItem label="SDK">
+    ```typescript
+    import { createKsefnik } from '@ksefnik/core';
+
+    const ksef = createKsefnik({
+      config: { nip: '5213456784' },
+    });
+
+    const invoices = await ksef.invoices.fetch({
+      from: '2026-03-01',
+      to: '2026-03-31',
+    });
+
+    const report = await ksef.validation.validate(invoices);
+
+    console.log(`Poprawne: ${report.valid.length}`);
+    console.log(`Z błędami: ${report.invalid.length}`);
+
+    // Wyświetl błędy
+    for (const result of report.invalid) {
+      console.log(`\nFaktura ${result.invoice.number}:`);
+      for (const error of result.errors) {
+        console.log(`  [${error.rule}] ${error.message} (pole: ${error.field})`);
+      }
+    }
+    ```
+  </TabItem>
+  <TabItem label="CLI">
+    ```bash
+    # Walidacja faktur z pliku JSON
+    ksefnik validate ./faktury.json
+
+    # Walidacja z formatem tabeli
+    ksefnik validate ./faktury.json --format table
+
+    # Pokaż tylko błędy (bez poprawnych)
+    ksefnik validate ./faktury.json --errors-only
+    ```
+  </TabItem>
+</Tabs>
+
+## Struktura ValidationReport
+
+```typescript
+interface ValidationReport {
+  valid: ValidationResult[];
+  invalid: ValidationResult[];
+  totalChecked: number;
+  errorCount: number;
+}
+
+interface ValidationResult {
+  invoice: Invoice;
+  errors: ValidationError[];
+  isValid: boolean;
+}
+
+interface ValidationError {
+  rule: string;       // np. 'nip-seller-checksum'
+  field: string;      // np. 'sellerNip'
+  message: string;    // czytelny opis błędu
+  severity: 'error' | 'warning';
+}
+```
+
+## Filtrowanie błędów po regule
+
+```typescript
+const report = await ksef.validation.validate(invoices);
+
+// Znajdź wszystkie faktury z błędnym NIP
+const nipErrors = report.invalid.filter(r =>
+  r.errors.some(e => e.rule.startsWith('nip-'))
+);
+
+console.log(`Faktury z błędnym NIP: ${nipErrors.length}`);
+
+// Znajdź faktury z niespójnymi kwotami
+const amountErrors = report.invalid.filter(r =>
+  r.errors.some(e => e.rule.startsWith('amount-'))
+);
+
+console.log(`Faktury z błędnymi kwotami: ${amountErrors.length}`);
+```
+
+<Aside type="tip">
+  Uruchamiaj walidację **przed** uzgadnianiem. Faktura z błędnym NIP nie zostanie dopasowana do przelewu przez pass `exactNip`, co obniży match rate.
+</Aside>
+
+## Walidacja pojedynczej faktury
+
+```typescript
+const result = await ksef.validation.validateOne({
+  number: 'FV/2026/03/001',
+  sellerNip: '5213456784',
+  sellerName: 'CodeFormers sp. z o.o.',
+  buyerNip: '7740001454',
+  buyerName: 'Klient ABC sp. z o.o.',
+  issueDate: '2026-03-15',
+  saleDate: '2026-03-15',
+  grossAmount: 12300, // 123,00 PLN
+  netAmount: 10000,   // 100,00 PLN
+  vatAmount: 2300,    //  23,00 PLN
+  vatRate: '23%',
+  currency: 'PLN',
+});
+
+if (result.isValid) {
+  console.log('Faktura poprawna');
+} else {
+  console.log('Błędy:', result.errors);
+}
+```
+
+## Przykład: walidacja batch'u 100 faktur przed wysłaniem do KSeF
+
+<Steps>
+  1. Przygotuj plik `faktury-do-wyslania.json` z listą 100 faktur.
+  2. Uruchom walidację:
+     ```bash
+     ksefnik validate ./faktury-do-wyslania.json --format table
+     ```
+  3. Przejrzyj raport — popraw faktury z błędami.
+  4. Po poprawkach uruchom walidację ponownie, aż wszystkie faktury będą poprawne.
+  5. Wyślij faktury do KSeF z pewnością, że nie zostaną odrzucone.
+</Steps>
+
+<Aside type="caution">
+  Ksefnik implementuje 20 najczęstszych reguł. KSeF ma ich znacznie więcej (87+). Przejście walidacji ksefnik nie gwarantuje akceptacji przez KSeF, ale eliminuje najczęstsze przyczyny odrzuceń.
+</Aside>

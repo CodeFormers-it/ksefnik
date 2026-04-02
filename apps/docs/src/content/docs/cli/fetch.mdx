@@ -1,0 +1,75 @@
+---
+title: "Komenda: fetch"
+description: Pobieranie faktur z KSeF za podany okres.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Komenda `fetch` pobiera faktury z Krajowego Systemu e-Faktur za wskazany zakres dat.
+
+## Użycie
+
+```bash
+ksefnik fetch --from <data> --to <data> [--format json|table]
+```
+
+## Parametry
+
+| Parametr | Wymagany | Opis |
+|----------|----------|------|
+| `--from` | Tak | Data początkowa (YYYY-MM-DD) |
+| `--to` | Tak | Data końcowa (YYYY-MM-DD) |
+| `--format` | Nie | Format wyjścia: `json` lub `table` (domyślnie) |
+
+## Wymagania
+
+Komenda wymaga skonfigurowanego adaptera KSeF:
+- `--nip` lub `KSEFNIK_NIP` -- NIP podmiotu
+- `--token` lub `KSEFNIK_TOKEN` -- token autoryzacyjny
+- `--env` lub `KSEFNIK_ENV` -- środowisko (domyślnie `production`)
+
+## Przykłady
+
+```bash
+# Pobierz faktury z marca 2026
+ksefnik fetch --from 2026-03-01 --to 2026-03-31
+
+# Wynik w formacie tabeli:
+# ┌────────────────────┬──────────────────┬──────────────┬──────────────┐
+# │ Referencja KSeF    │ Numer faktury    │ Kwota netto  │ Data         │
+# ├────────────────────┼──────────────────┼──────────────┼──────────────┤
+# │ KSeF-ABC-123       │ FV/2026/03/001   │ 1 000,00 PLN │ 2026-03-10  │
+# │ KSeF-DEF-456       │ FV/2026/03/002   │ 2 500,00 PLN │ 2026-03-15  │
+# └────────────────────┴──────────────────┴──────────────┴──────────────┘
+# Pobrano: 2 faktury
+```
+
+```bash
+# Pobierz jako JSON do dalszego przetwarzania
+ksefnik fetch --from 2026-03-01 --to 2026-03-31 --format json
+```
+
+```json
+{
+  "invoices": [
+    {
+      "ksefReference": "KSeF-ABC-123",
+      "invoiceNumber": "FV/2026/03/001",
+      "sellerNip": "1234567890",
+      "buyerNip": "0987654321",
+      "netAmount": 100000,
+      "grossAmount": 123000,
+      "issueDate": "2026-03-10"
+    }
+  ],
+  "count": 2
+}
+```
+
+<Aside type="tip">
+Kwoty w formacie JSON są w groszach (100000 = 1000,00 PLN). W formacie tabeli są przeliczane automatycznie.
+</Aside>
+
+<Aside type="caution">
+Maksymalny zakres dat zależy od limitu API KSeF. W środowisku `demo` limit to 30 dni.
+</Aside>

@@ -1,0 +1,101 @@
+---
+title: "Komenda: validate"
+description: Walidacja faktur przed wysyłką do KSeF.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Komenda `validate` sprawdza poprawność faktury zgodnie z regułami walidacyjnymi KSeF bez wysyłania jej do systemu.
+
+## Użycie
+
+```bash
+ksefnik validate <plik> [--format json|table]
+```
+
+## Parametry
+
+| Parametr | Wymagany | Opis |
+|----------|----------|------|
+| `<plik>` | Tak | Ścieżka do pliku JSON z fakturą lub tablicą faktur |
+| `--format` | Nie | Format wyjścia: `json` lub `table` (domyślnie) |
+
+## Format wejściowy
+
+Plik JSON powinien zawierać pojedynczą fakturę lub tablicę faktur:
+
+```json
+{
+  "invoiceNumber": "FV/2026/03/001",
+  "issueDate": "2026-03-15",
+  "sellerNip": "1234567890",
+  "buyerNip": "0987654321",
+  "netAmount": 100000,
+  "vatAmount": 23000,
+  "grossAmount": 123000
+}
+```
+
+## Przykład -- faktura poprawna
+
+```bash
+ksefnik validate ./faktura.json
+
+# Walidacja: FV/2026/03/001
+# ✓ NIP sprzedawcy -- poprawny
+# ✓ NIP nabywcy -- poprawny
+# ✓ Data wystawienia -- poprawna
+# ✓ Kwoty -- spójne (netto + VAT = brutto)
+# ✓ Numer faktury -- poprawny format
+#
+# Wynik: POPRAWNA
+```
+
+## Przykład -- faktura z błędami
+
+```bash
+ksefnik validate ./faktura-bledna.json
+
+# Walidacja: FV/2026/03/002
+# ✓ NIP sprzedawcy -- poprawny
+# ✗ NIP nabywcy -- nieprawidłowa suma kontrolna
+# ✓ Data wystawienia -- poprawna
+# ✗ Kwoty -- netto + VAT ≠ brutto (123000 + 23000 ≠ 150000)
+# ✓ Numer faktury -- poprawny format
+#
+# Wynik: 2 BŁĘDY
+```
+
+## Format JSON
+
+```bash
+ksefnik validate ./faktura.json --format json
+```
+
+```json
+{
+  "valid": false,
+  "invoiceNumber": "FV/2026/03/002",
+  "errors": [
+    {
+      "rule": "buyer-nip-checksum",
+      "message": "NIP nabywcy ma nieprawidłową sumę kontrolną",
+      "field": "buyerNip",
+      "value": "1234567891"
+    },
+    {
+      "rule": "amount-consistency",
+      "message": "Suma netto + VAT nie równa się kwocie brutto",
+      "fields": ["netAmount", "vatAmount", "grossAmount"]
+    }
+  ]
+}
+```
+
+<Aside type="tip">
+Walidacja jest lokalna i nie wymaga połączenia z KSeF. Możesz walidować faktury offline.
+</Aside>
+
+<Aside>
+Lista wszystkich reguł walidacji dostępna jest w sekcji Walidacja.
+</Aside>

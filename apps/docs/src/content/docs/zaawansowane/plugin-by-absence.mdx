@@ -1,0 +1,124 @@
+---
+title: Plugin by absence
+description: Jak działa wzorzec "plugin by absence" — monetyzacja bez DRM i sprawdzania licencji.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components'
+
+Ksefnik monetyzuje funkcje pro bez sprawdzania licencji, bez phone-home i bez DRM. Wzorzec nazywamy **plugin by absence** — brak pakietu oznacza brak feature, nie błąd.
+
+## Mechanizm
+
+```typescript
+// Wewnątrz @ksefnik/core — loader pluginów
+export async function loadPlugin(name: string): Promise<KsefPlugin | null> {
+  try {
+    const mod = await import(name)
+    return mod.default ?? mod
+  } catch {
+    return null  // Pakiet nie istnieje — null, nie error
+  }
+}
+```
+
+Cały mechanizm to `try/catch` wokół dynamicznego `import()`. Jeśli pakiet npm nie jest zainstalowany, `import()` rzuci `MODULE_NOT_FOUND`, a loader zwróci `null`.
+
+## Jak to działa w praktyce
+
+<Steps>
+1. Użytkownik instaluje `@ksefnik/core` (open-source, darmowy).
+
+2. Użytkownik próbuje załadować pro plugin:
+   ```typescript
+   const plugin = await ksefnik.plugins.load('@ksefnik/pro-reconciliation')
+   // → null (pakiet nie zainstalowany)
+   ```
+
+3. Pipeline uzgadniania działa z 6 wbudowanymi passami (order 100-500).
+
+4. Użytkownik kupuje dostęp do `@ksefnik/pro-reconciliation` (prywatny npm registry).
+
+5. Po instalacji pakietu:
+   ```typescript
+   const plugin = await ksefnik.plugins.load('@ksefnik/pro-reconciliation')
+   // → { name: '@ksefnik/pro-reconciliation', version: '1.0.0', ... }
+   ```
+
+6. Pipeline ma teraz dodatkowe passy (order 600+) — lepsze dopasowania.
+</Steps>
+
+## Co dają pro pluginy
+
+| Plugin | Order | Feature |
+|--------|-------|---------|
+| `@ksefnik/pro-reconciliation` | 600-699 | Zaawansowane passy: wzorce płatności, matching po kontach |
+| `@ksefnik/pro-analytics` | — | Hooki: statystyki, trendy, alerty |
+| `@ksefnik/pro-compliance` | — | Dodatkowe reguły walidacji (kolejne 30+) |
+
+Pro passy mają `order` >= 600, więc uruchamiają się **po** wbudowanych passach. Nigdy nie zastępują core — rozszerzają go.
+
+## Zasady etyczne
+
+<Aside type="tip">
+  Ksefnik nigdy nie pokazuje użytkownikowi komunikatu "licencja wygasła", "trial expired" ani "upgrade to pro". Brak pakietu = cisza.
+</Aside>
+
+Czego NIE robimy:
+
+- **Zero license validation** — brak sprawdzania kluczy, tokenów, dat wygaśnięcia
+- **Zero phone-home** — SDK nigdy nie łączy się z naszym serwerem
+- **Zero DRM** — brak obfuscacji, brak blokad runtime
+- **Zero nagware** — brak komunikatów "kup pro"
+
+Jeśli ktoś ma pakiet — działa. Jeśli nie ma — nie działa. Koniec logiki.
+
+## Monetyzacja
+
+Sprzedaż odbywa się przez prywatny npm registry:
+
+```bash
+# Konfiguracja dostępu (jednorazowo)
+npm config set @ksefnik:registry https://npm.ksefnik.pl
+npm login --registry=https://npm.ksefnik.pl
+
+# Instalacja pro pakietu
+pnpm add @ksefnik/pro-reconciliation
+```
+
+Model cenowy: subskrypcja = dostęp do registry. Brak płatności = brak dostępu do `npm install`. Ale jeśli pakiet jest już zainstalowany w `node_modules`, działa bez ograniczeń.
+
+## Ładowanie wielu pluginów
+
+```typescript
+const ksefnik = createKsefnik({
+  config: {
+    nip: '1234567890',
+    environment: 'production',
+    plugins: [
+      '@ksefnik/pro-reconciliation',
+      '@ksefnik/pro-analytics',
+      '@ksefnik/pro-compliance',
+    ],
+  },
+})
+
+// Załaduj te, które są zainstalowane — resztę pomiń
+const loaded: string[] = []
+for (const name of ksefnik.config?.plugins ?? []) {
+  const plugin = await ksefnik.plugins.load(name)
+  if (plugin) loaded.push(plugin.name)
+}
+
+console.log(`Pro pluginy: ${loaded.length > 0 ? loaded.join(', ') : 'brak'}`)
+```
+
+## Dlaczego nie DRM
+
+Tradycyjne DRM w SDK to antywzorzec:
+
+- Wymaga phone-home (latencja, failure point)
+- Irytuje płacących klientów (false positives)
+- Nie powstrzymuje piratów (obfuscacja = reverse engineering challenge)
+- Tworzy zły PR w społeczności open-source
+
+Plugin by absence jest prostszy, uczciwszy i bardziej niezawodny. Kto płaci — ma pakiet. Kto nie płaci — nie ma. Żadnej dodatkowej logiki.

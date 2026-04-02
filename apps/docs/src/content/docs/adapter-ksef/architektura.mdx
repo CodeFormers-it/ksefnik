@@ -1,0 +1,172 @@
+---
+title: Architektura adaptera KSeF
+description: Wzorzec adapter do komunikacji z API KSeF -- budowa i przeplyw danych.
+---
+
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components'
+
+## Wzorzec adapter
+
+Adapter KSeF opakowuje niskopoziomowego klienta API (`KsefClient`) w stabilny interfejs (`KsefAdapter`). Dzieki temu mozesz wymienic klienta bez zmiany kodu biznesowego.
+
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────┐     ┌──────────┐
+│  Twoj kod   │────>│ KsefAdapterImpl  │────>│ KsefClient  │────>│ KSeF API │
+│  (SDK/CLI)  │     │ (adapter)        │     │ (pluggable) │     │ (MF)     │
+└─────────────┘     └──────────────────┘     └─────────────┘     └──────────┘
+```
+
+## Interfejs KsefAdapter
+
+Publiczny interfejs, z ktorym pracuje reszta aplikacji:
+
+```ts
+interface KsefAdapter {
+  fetchInvoices(opts: FetchInvoicesOpts): Promise<Invoice[]>
+  sendInvoice(input: SendInvoiceInput): Promise<SendInvoiceResult>
+  getUpo(ksefReference: string): Promise<UpoResult>
+}
+```
+
+## Interfejs KsefClient
+
+Niskopoziomowy klient -- mozna go wymienic na symulator, mock lub wlasna implementacje:
+
+```ts
+interface KsefClient {
+  initSession(config: KsefClientConfig): Promise<KsefSessionState>
+  terminateSession(token: string): Promise<void>
+  fetchInvoices(params: {
+    token: string
+    dateFrom: string
+    dateTo: string
+    subjectNip?: string
+    pageSize?: number
+    pageOffset?: number
+  }): Promise<{ invoices: KsefRawInvoice[]; total: number }>
+  sendInvoice(params: {
+    token: string
+    xml: string
+  }): Promise<{ ksefReferenceNumber: string; timestamp: string }>
+  getUpo(params: {
+    token: string
+    ksefReferenceNumber: string
+  }): Promise<{ xml: string; status: 'confirmed' | 'pending' | 'rejected' }>
+}
+```
+
+## KsefAdapterImpl
+
+Glowna implementacja adaptera laczaca `KsefClient` z zarzadzaniem sesja:
+
+```ts
+class KsefAdapterImpl implements KsefAdapter {
+  private session: KsefSessionState | null = null
+
+  constructor(
+    private readonly client: KsefClient,
+    private readonly config: KsefClientConfig,
+  ) {}
+
+  async initSession(): Promise<void> {
+    this.session = await this.client.initSession(this.config)
+  }
+
+  async closeSession(): Promise<void> {
+    if (this.session) {
+      await this.client.terminateSession(this.session.token)
+      this.session = null
+    }
+  }
+
+  private ensureSession(): KsefSessionState {
+    if (!this.session) {
+      throw new Error('KSeF session not initialized. Call initSession() first.')
+    }
+    return this.session
+  }
+
+  async fetchInvoices(opts: FetchInvoicesOpts): Promise<Invoice[]> {
+    const session = this.ensureSession()
+    const result = await this.client.fetchInvoices({
+      token: session.token,
+      dateFrom: opts.from,
+      dateTo: opts.to,
+      subjectNip: opts.nip,
+      pageSize: opts.pageSize,
+      pageOffset: opts.pageOffset,
+    })
+    return result.invoices.map((raw) => ({ /* ... mapowanie */ }))
+  }
+
+  async sendInvoice(input: SendInvoiceInput): Promise<SendInvoiceResult> {
+    const session = this.ensureSession()
+    // ... delegacja do client.sendInvoice()
+  }
+
+  async getUpo(ksefReference: string): Promise<UpoResult> {
+    const session = this.ensureSession()
+    // ... delegacja do client.getUpo()
+  }
+}
+```
+
+## Zarzadzanie sesja
+
+<CardGrid>
+  <Card title="initSession()">
+    Tworzy nowa sesje KSeF. Musi byc wywolana przed jakimkolwiek zapytaniem.
+  </Card>
+  <Card title="closeSession()">
+    Zamyka sesje i zwalnia zasoby. Bezpieczna do wywolania wielokrotnego.
+  </Card>
+  <Card title="ensureSession()">
+    Prywatna metoda -- rzuca blad jesli sesja nie zostala zainicjalizowana.
+  </Card>
+  <Card title="getSession()">
+    Zwraca biezacy stan sesji lub `null`.
+  </Card>
+</CardGrid>
+
+## Stan sesji: KsefSessionState
+
+```ts
+interface KsefSessionState {
+  token: string
+  nip: string
+  environment: 'production' | 'demo' | 'test'
+  expiresAt: Date
+  referenceNumber: string
+}
+```
+
+## Wymienne implementacje KsefClient
+
+<Aside type="tip">
+  Dzieki wzorcowi adapter mozesz latwo podmienic klienta w zaleznosci od srodowiska:
+</Aside>
+
+| Implementacja | Uzycie |
+|--------------|--------|
+| Prawdziwy klient | Produkcja -- komunikacja z API KSeF Ministerstwa Finansow |
+| `@ksefnik/simulator` | Testy -- symulator offline z gotowymi scenariuszami |
+| Wlasny adapter | Integracja z firmowym proxy lub API gateway |
+
+```ts
+import { KsefAdapterImpl } from '@ksefnik/core'
+import { createSimulatorClient } from '@ksefnik/simulator'
+
+// Produkcja
+const prodAdapter = new KsefAdapterImpl(realClient, prodConfig)
+
+// Testy
+const testAdapter = new KsefAdapterImpl(createSimulatorClient(), testConfig)
+```
+
+## Dodatkowe warstwy
+
+Adapter mozna wzbogacic o dodatkowe mechanizmy:
+
+- [Retry z exponential backoff](/adapter-ksef/retry/) -- automatyczne ponawianie blednych zapytan
+- [Cache TTL](/adapter-ksef/cache/) -- buforowanie odpowiedzi z konfigurowalnym czasem zycia
+- [Session Manager](/adapter-ksef/session-manager/) -- automatyczne odnawianie sesji

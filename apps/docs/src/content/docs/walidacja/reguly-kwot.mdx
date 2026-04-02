@@ -1,0 +1,150 @@
+---
+title: Reguły kwot
+description: Reguły walidacji kwot i sum na fakturach.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Ksefnik zawiera 4 reguły walidujące poprawność kwot na fakturach. Wszystkie kwoty są wyrażone w **groszach** (1 PLN = 100 groszy).
+
+## amount-positive
+
+Sprawdza, czy kwota brutto jest dodatnia.
+
+```typescript
+import { amountPositiveRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `grossAmount` | `> 0` |
+
+| Kwota (grosze) | PLN | Wynik |
+|----------------|-----|-------|
+| `123000` | 1 230,00 | valid |
+| `1` | 0,01 | valid |
+| `0` | 0,00 | invalid |
+| `-100` | -1,00 | invalid |
+
+## amount-max
+
+Sprawdza, czy kwota brutto nie przekracza maksimum.
+
+```typescript
+import { amountMaxRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `grossAmount` | `<= 9 999 999 999` groszy (99 999 999,99 PLN) |
+
+| Kwota (grosze) | PLN | Wynik |
+|----------------|-----|-------|
+| `9999999999` | 99 999 999,99 | valid |
+| `10000000000` | 100 000 000,00 | invalid |
+
+## line-items-sum
+
+Sprawdza, czy suma wartości netto pozycji (`lineItems`) jest równa kwocie netto faktury.
+
+```typescript
+import { lineItemsSumRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `lineItems` | `sum(lineItems[].netAmount) === netAmount` |
+
+<Aside type="note">
+  Reguła pomija sprawdzenie, jeśli `lineItems` jest puste lub `netAmount` nie jest podane. Dzięki temu faktury bez pozycji nie generują błędów.
+</Aside>
+
+**Przykład -- valid:**
+
+```typescript
+const invoice = {
+  netAmount: 100000,  // 1000,00 PLN
+  lineItems: [
+    { netAmount: 60000, description: 'Usługa A', lineNumber: 1 },
+    { netAmount: 40000, description: 'Usługa B', lineNumber: 2 },
+  ],
+}
+// sum = 60000 + 40000 = 100000 === netAmount -> valid
+```
+
+**Przykład -- invalid:**
+
+```typescript
+const invoice = {
+  netAmount: 100000,
+  lineItems: [
+    { netAmount: 60000, description: 'Usługa A', lineNumber: 1 },
+    { netAmount: 30000, description: 'Usługa B', lineNumber: 2 },
+  ],
+}
+// sum = 60000 + 30000 = 90000 !== 100000 -> invalid
+// message: "Line items net sum (90000) != netAmount (100000)"
+```
+
+## vat-calculation
+
+Sprawdza, czy kwota VAT jest poprawna: `grossAmount - netAmount === vatAmount` z tolerancją +-1 grosz.
+
+```typescript
+import { vatCalculationRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `vatAmount` | różnica brutto - netto - VAT nie większa niż 1 grosz |
+
+<Aside type="note">
+  Reguła pomija sprawdzenie, jeśli `netAmount` lub `vatAmount` nie jest podane.
+</Aside>
+
+**Przykład -- valid:**
+
+```typescript
+const invoice = {
+  grossAmount: 123000,  // 1230,00 PLN
+  netAmount: 100000,    // 1000,00 PLN
+  vatAmount: 23000,     // 230,00 PLN
+}
+// 123000 - 100000 = 23000 === vatAmount -> valid
+```
+
+**Przykład -- valid (tolerancja 1 grosz):**
+
+```typescript
+const invoice = {
+  grossAmount: 123001,  // 1230,01 PLN
+  netAmount: 100000,
+  vatAmount: 23000,
+}
+// |123001 - 100000 - 23000| = 1 <= 1 -> valid
+```
+
+**Przykład -- invalid:**
+
+```typescript
+const invoice = {
+  grossAmount: 123000,
+  netAmount: 100000,
+  vatAmount: 20000,  // powinno być 23000
+}
+// |123000 - 100000 - 20000| = 3000 > 1 -> invalid
+```
+
+<Aside type="tip">
+  Tolerancja 1 grosza wynika z różnic zaokrągleń przy obliczaniu VAT od poszczególnych pozycji. Jest to standardowa praktyka w systemach księgowych.
+</Aside>
+
+## Użycie
+
+```typescript
+import { validateInvoice, amountPositiveRule, amountMaxRule,
+         lineItemsSumRule, vatCalculationRule } from '@ksefnik/core'
+
+const amountRules = [amountPositiveRule, amountMaxRule, lineItemsSumRule, vatCalculationRule]
+const report = validateInvoice(invoice, amountRules)
+```

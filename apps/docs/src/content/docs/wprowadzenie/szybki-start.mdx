@@ -1,0 +1,123 @@
+---
+title: Szybki start
+description: Od zera do pierwszego uzgadniania w 5 minut
+---
+
+import { Steps, Tabs, TabItem, Aside, LinkCard } from '@astrojs/starlight/components'
+
+Ten przewodnik przeprowadzi Cię przez pierwsze uzgadnianie faktur KSeF z przelewami bankowymi. Użyjemy **symulatora**, więc nie potrzebujesz dostępu do prawdziwego KSeF.
+
+<Steps>
+
+1. **Zainstaluj pakiety**
+
+   <Tabs>
+     <TabItem label="pnpm">
+       ```bash
+       pnpm add @ksefnik/core @ksefnik/simulator
+       ```
+     </TabItem>
+     <TabItem label="npm">
+       ```bash
+       npm install @ksefnik/core @ksefnik/simulator
+       ```
+     </TabItem>
+     <TabItem label="yarn">
+       ```bash
+       yarn add @ksefnik/core @ksefnik/simulator
+       ```
+     </TabItem>
+   </Tabs>
+
+2. **Utwórz plik `reconcile.ts`**
+
+   ```typescript
+   import { createKsefnik } from '@ksefnik/core'
+   import { createKsefSimulator } from '@ksefnik/simulator'
+
+   async function main() {
+     // 1. Utwórz symulator z gotowym scenariuszem
+     const { adapter, invoices } = createKsefSimulator({
+       scenario: 'happy-path',
+     })
+
+     // 2. Zainicjalizuj SDK z symulatorem zamiast prawdziwego KSeF
+     const ksef = createKsefnik({
+       config: { nip: '5213456784', environment: 'test' },
+       adapter,
+     })
+
+     // 3. Zaimportuj wyciąg bankowy (symulator generuje dopasowane transakcje)
+     const bankStatement = await ksef.bank.importFromFile('./wyciag.csv')
+
+     // 4. Uruchom uzgadnianie
+     const report = await ksef.reconciliation.run(invoices, bankStatement)
+
+     // 5. Wyświetl wyniki
+     console.log('Podsumowanie uzgadniania:')
+     console.log(`  Dopasowane:     ${report.summary.matchedCount}`)
+     console.log(`  Niedopasowane:  ${report.summary.unmatchedInvoices}`)
+     console.log(`  Bez faktury:    ${report.summary.unmatchedTransactions}`)
+
+     // 6. Szczegóły dopasowań
+     for (const match of report.matches) {
+       console.log(
+         `  ${match.invoice.number} → ${match.transaction.title} ` +
+         `(${match.confidence}%, pass: ${match.passName})`
+       )
+     }
+   }
+
+   main()
+   ```
+
+3. **Uruchom skrypt**
+
+   ```bash
+   npx tsx reconcile.ts
+   ```
+
+4. **Sprawdź wynik**
+
+   ```
+   Podsumowanie uzgadniania:
+     Dopasowane:     8
+     Niedopasowane:  2
+     Bez faktury:    1
+
+     FV/2026/001 → Przelew za FV/2026/001 (99%, pass: ksef-ref)
+     FV/2026/002 → Zapłata dla Acme Sp. z o.o. (95%, pass: exact)
+     FV/2026/003 → FV 2026/003 opłata (90%, pass: invoice-ref)
+     FV/2026/004 → Płatność Acme (78%, pass: fuzzy)
+     ...
+   ```
+
+</Steps>
+
+<Aside type="tip">
+  Symulator (`@ksefnik/simulator`) zastępuje prawdziwe API KSeF w środowisku deweloperskim i testowym. Generuje realistyczne faktury i transakcje bankowe, które możesz uzgadniać bez dostępu do KSeF. Scenariusz `happy-path` zawiera 10 faktur z dopasowanymi przelewami.
+</Aside>
+
+## Co dalej?
+
+<Aside type="note">
+  W powyższym przykładzie użyliśmy symulatora. Aby połączyć się z prawdziwym KSeF, zamień `createKsefSimulator` na konfigurację adaptera z tokenem autoryzacyjnym — szczegóły w przewodniku [Pobieranie faktur z KSeF](/przewodniki/pobieranie-faktur/).
+</Aside>
+
+<LinkCard
+  title="Instalacja"
+  description="Szczegóły instalacji, wymagania systemowe i konfiguracja monorepo."
+  href="/wprowadzenie/instalacja/"
+/>
+
+<LinkCard
+  title="Jak działa pipeline"
+  description="Poznaj 6 etapów silnika uzgadniania i dowiedz się, jak konfigurować passy."
+  href="/silnik-uzgadniania/jak-dziala-pipeline/"
+/>
+
+<LinkCard
+  title="Import wyciągu bankowego"
+  description="Obsługiwane formaty bankowe, auto-detekcja i ekstrakcja NIP."
+  href="/przewodniki/import-wyciagu/"
+/>

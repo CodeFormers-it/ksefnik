@@ -1,0 +1,188 @@
+---
+title: Interfejsy
+description: Kompletna referencja interfejsów TypeScript definiujących kontrakty w ksefnik.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Wszystkie interfejsy eksportowane z `@ksefnik/shared` definiują kontrakty implementacyjne dla adapterów, parserów, storage, passów i pluginów.
+
+```typescript
+import type {
+  KsefAdapter, FetchInvoicesOpts, SendInvoiceInput, SendInvoiceResult, UpoResult,
+  BankStatementParser,
+  Storage, InvoiceQuery, TransactionQuery,
+  ReconciliationPass, MatchingContext, MatchResult,
+  KsefPlugin, McpToolDefinition, CliCommand,
+} from '@ksefnik/shared'
+```
+
+## KsefAdapter
+
+Kontrakt dla klienta komunikującego się z API KSeF. Więcej w [Wzorzec adapter](/zaawansowane/wzorzec-adapter/).
+
+```typescript
+interface KsefAdapter {
+  fetchInvoices(opts: FetchInvoicesOpts): Promise<Invoice[]>
+  sendInvoice(input: SendInvoiceInput): Promise<SendInvoiceResult>
+  getUpo(ksefReference: string): Promise<UpoResult>
+}
+```
+
+### FetchInvoicesOpts
+
+| Pole | Typ | Wymagane | Opis |
+|------|-----|----------|------|
+| `from` | `string` | tak | Data początkowa (YYYY-MM-DD) |
+| `to` | `string` | tak | Data końcowa (YYYY-MM-DD) |
+| `nip` | `string` | nie | NIP kontrahenta |
+| `pageSize` | `number` | nie | Rozmiar strony |
+| `pageOffset` | `number` | nie | Offset paginacji |
+
+### SendInvoiceInput
+
+| Pole | Typ | Wymagane | Opis |
+|------|-----|----------|------|
+| `xml` | `string` | tak | XML faktury |
+| `nip` | `string` | tak | NIP wystawcy |
+
+### SendInvoiceResult
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `ksefReference` | `string` | Numer referencyjny KSeF |
+| `timestamp` | `string` | Timestamp przyjęcia |
+
+### UpoResult
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `ksefReference` | `string` | Numer referencyjny KSeF |
+| `upoXml` | `string` | UPO w XML |
+| `status` | `'confirmed' \| 'pending' \| 'rejected'` | Status UPO |
+
+## BankStatementParser
+
+Kontrakt dla parsera wyciągów bankowych. Każdy parser obsługuje jeden format.
+
+```typescript
+interface BankStatementParser {
+  bank: string
+  canParse(content: string | Buffer): Promise<boolean>
+  parse(content: string | Buffer): Promise<BankTransaction[]>
+}
+```
+
+| Metoda | Opis |
+|--------|------|
+| `bank` | Identyfikator banku (np. `'mbank'`, `'ing'`, `'mt940'`) |
+| `canParse()` | Sprawdza czy content pasuje do formatu tego parsera |
+| `parse()` | Parsuje content na listę transakcji bankowych |
+
+<Aside type="tip">
+  `canParse()` powinno być szybkie i niedestrukcyjne — sprawdza nagłówki/wzorce, nie parsuje całego pliku.
+</Aside>
+
+## Storage
+
+Kontrakt dla warstwy persystencji. Wbudowane implementacje: `InMemoryStorage`, `SqliteStorage`.
+
+```typescript
+interface Storage {
+  saveInvoices(invoices: Invoice[]): Promise<void>
+  getInvoices(query?: InvoiceQuery): Promise<Invoice[]>
+  saveTransactions(txs: BankTransaction[]): Promise<void>
+  getTransactions(query?: TransactionQuery): Promise<BankTransaction[]>
+  saveReport(report: ReconciliationReport): Promise<void>
+  getReport(id: string): Promise<ReconciliationReport | null>
+}
+```
+
+### InvoiceQuery
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `nip` | `string?` | Filtruj po NIP |
+| `from` | `string?` | Data od (YYYY-MM-DD) |
+| `to` | `string?` | Data do (YYYY-MM-DD) |
+| `invoiceNumber` | `string?` | Filtruj po numerze faktury |
+
+### TransactionQuery
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `from` | `string?` | Data od |
+| `to` | `string?` | Data do |
+| `bank` | `string?` | Filtruj po banku |
+| `minAmount` | `number?` | Minimalna kwota (w groszach) |
+| `maxAmount` | `number?` | Maksymalna kwota (w groszach) |
+
+## ReconciliationPass
+
+Kontrakt dla pojedynczego przebiegu pipeline uzgadniania.
+
+```typescript
+interface ReconciliationPass {
+  name: string
+  order: number
+  run(context: MatchingContext): Promise<MatchResult[]>
+}
+```
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `name` | `string` | Unikalna nazwa passa |
+| `order` | `number` | Kolejność wykonania (niższy = wcześniej). Core: 100-500, pluginy: 600+ |
+| `run()` | `function` | Logika dopasowania — zwraca nowe dopasowania |
+
+### MatchingContext
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `invoices` | `Invoice[]` | Wszystkie faktury |
+| `transactions` | `BankTransaction[]` | Wszystkie transakcje |
+| `alreadyMatched` | `Match[]` | Dopasowania z wcześniejszych passów |
+
+### MatchResult
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `invoiceId` | `string` | ID dopasowanej faktury |
+| `transactionId` | `string` | ID dopasowanej transakcji |
+| `transactionIds` | `string[]?` | Wiele transakcji (partial match) |
+| `confidence` | `number` | Pewność (0-100) |
+| `reasons` | `string[]` | Powody dopasowania |
+
+## KsefPlugin
+
+Kontrakt dla pluginu. Tylko `name` i `version` są wymagane.
+
+```typescript
+interface KsefPlugin {
+  name: string
+  version: string
+  reconciliationPasses?(): ReconciliationPass[]
+  onReconciliationComplete?(report: ReconciliationReport): Promise<void>
+  onInvoicesSynced?(invoices: Invoice[]): Promise<void>
+  mcpTools?(): McpToolDefinition[]
+  cliCommands?(): CliCommand[]
+}
+```
+
+### McpToolDefinition
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `name` | `string` | Nazwa narzędzia MCP |
+| `description` | `string` | Opis dla modelu AI |
+| `inputSchema` | `Record<string, unknown>` | JSON Schema parametrów |
+| `handler` | `(input: unknown) => Promise<unknown>` | Implementacja |
+
+### CliCommand
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `name` | `string` | Nazwa komendy CLI |
+| `description` | `string` | Opis komendy |
+| `options` | `Record<string, unknown>?` | Opcje Commander.js |
+| `action` | `(...args: unknown[]) => Promise<void>` | Implementacja |

@@ -1,0 +1,78 @@
+---
+title: "Scenariusz: happy-path"
+description: Domyślny scenariusz symulatora -- wszystkie operacje kończą się sukcesem.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components'
+
+Scenariusz `happy-path` to domyślne zachowanie symulatora. Wszystkie operacje KSeF (fetch, send, getUpo) kończą się natychmiastowym sukcesem bez żadnych błędów ani opóźnień.
+
+## Zachowanie
+
+| Operacja | Rezultat |
+|----------|----------|
+| `fetchInvoices` | Zwraca faktury z InvoiceStore |
+| `sendInvoice` | Dodaje fakturę do store, zwraca ksefReference |
+| `getUpo` | Zwraca status `confirmed` natychmiast |
+
+## Hooks
+
+Brak. Scenariusz `happy-path` używa domyślnego zachowania `MockKsefAdapter` bez żadnych hooków przechwytujących.
+
+## Kiedy używać
+
+- Testy integracyjne sprawdzające poprawność logiki biznesowej
+- Scenariusze demo i prezentacje
+- Szybki start z biblioteką
+- Testy, w których zachowanie KSeF nie jest przedmiotem testu
+
+## Pełny przykład
+
+```ts
+import { createKsefSimulator } from '@ksefnik/simulator'
+import { createKsefnik } from '@ksefnik/core'
+
+const { adapter, store } = createKsefSimulator({
+  scenario: 'happy-path',
+})
+
+const ksefnik = createKsefnik({
+  nip: '1234567890',
+  adapter,
+})
+
+// Fetch -- pobierz faktury
+store.seed([
+  {
+    ksefReference: 'KSeF-ABC-123',
+    invoiceNumber: 'FV/2026/03/001',
+    sellerNip: '1234567890',
+    buyerNip: '5555555555',
+    netAmount: 250000,
+    grossAmount: 307500,
+    issueDate: '2026-03-10',
+  },
+])
+
+const invoices = await ksefnik.invoices.sync({
+  dateFrom: '2026-03-01',
+  dateTo: '2026-03-31',
+})
+console.log(invoices.count) // 1
+
+// Send -- wyślij fakturę
+const result = await ksefnik.invoices.send({
+  xml: '<Invoice>...</Invoice>',
+})
+console.log(result.ksefReference) // np. "SIM-1743548400000-abc12"
+
+// UPO -- pobierz potwierdzenie
+const upo = await ksefnik.invoices.getUpo({
+  ksefReference: result.ksefReference,
+})
+console.log(upo.status) // "confirmed"
+```
+
+<Aside type="tip">
+Scenariusz `happy-path` jest idealny jako punkt wyjścia. Jeśli potrzebujesz symulować błędy, użyj jednego z pozostałych scenariuszy lub stwórz własny.
+</Aside>

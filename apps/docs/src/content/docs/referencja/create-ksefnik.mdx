@@ -1,0 +1,156 @@
+---
+title: createKsefnik()
+description: Dokumentacja funkcji fabrycznej createKsefnik() — punkt wejścia do SDK.
+---
+
+import { Tabs, TabItem, Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components'
+
+Funkcja `createKsefnik()` to jedyny punkt wejścia do SDK. Tworzy instancję `Ksefnik` z pięcioma namespace'ami.
+
+## Sygnatura
+
+```typescript
+function createKsefnik(opts: CreateKsefnikOpts): Ksefnik
+```
+
+## CreateKsefnikOpts
+
+| Pole | Typ | Wymagane | Opis |
+|------|-----|----------|------|
+| `config` | `KsefnikConfig` | tak | Konfiguracja SDK (NIP, środowisko, token) |
+| `adapter` | `KsefAdapter` | nie | Adapter do komunikacji z KSeF API |
+| `storage` | `Storage` | nie | Implementacja storage (domyślnie `InMemoryStorage`) |
+
+## Namespace'y instancji Ksefnik
+
+<CardGrid>
+  <Card title="invoices" icon="document">
+    Pobieranie, wysyłanie i listowanie faktur z KSeF.
+  </Card>
+  <Card title="bank" icon="list-format">
+    Import i listowanie transakcji bankowych.
+  </Card>
+  <Card title="reconciliation" icon="puzzle">
+    Uruchamianie pipeline uzgadniania faktur z transakcjami.
+  </Card>
+  <Card title="validation" icon="approve-check">
+    Walidacja faktur za pomocą 20 wbudowanych reguł.
+  </Card>
+  <Card title="plugins" icon="add-document">
+    Rejestracja, ładowanie i listowanie pluginów.
+  </Card>
+</CardGrid>
+
+## Przykłady
+
+### Minimalna konfiguracja
+
+```typescript
+import { createKsefnik } from '@ksefnik/core'
+
+const ksefnik = createKsefnik({
+  config: {
+    nip: '1234567890',
+    environment: 'test',
+  },
+})
+
+// Gotowe do użycia — InMemoryStorage, bez adaptera KSeF
+const report = await ksefnik.validation.validate(invoices)
+```
+
+<Aside type="tip">
+  Bez adaptera KSeF możesz korzystać z `bank`, `reconciliation`, `validation` i `plugins`.
+  Tylko `invoices.fetch()`, `invoices.send()` i `invoices.getUpo()` wymagają adaptera.
+</Aside>
+
+### Z symulatorem KSeF
+
+```typescript
+import { createKsefnik } from '@ksefnik/core'
+import { createSimulatorAdapter } from '@ksefnik/simulator'
+
+const ksefnik = createKsefnik({
+  config: {
+    nip: '1234567890',
+    environment: 'test',
+  },
+  adapter: createSimulatorAdapter({ scenario: 'happy-path' }),
+})
+
+// Symulator odpowiada jak prawdziwy KSeF — offline
+const invoices = await ksefnik.invoices.fetch({
+  from: '2025-01-01',
+  to: '2025-12-31',
+})
+```
+
+### Z SQLite storage
+
+```typescript
+import { createKsefnik } from '@ksefnik/core'
+
+const ksefnik = createKsefnik({
+  config: {
+    nip: '1234567890',
+    environment: 'production',
+    token: process.env.KSEFNIK_TOKEN,
+    storage: 'sqlite',
+    sqlitePath: './data/ksefnik.db',
+  },
+})
+
+// Dane persystowane między uruchomieniami
+const invoices = await ksefnik.invoices.list()
+```
+
+### Z własnym adapterem
+
+```typescript
+import { createKsefnik } from '@ksefnik/core'
+import type { KsefAdapter } from '@ksefnik/shared'
+
+const myAdapter: KsefAdapter = {
+  async fetchInvoices(opts) {
+    const res = await fetch(`https://my-api.pl/invoices?from=${opts.from}&to=${opts.to}`)
+    return res.json()
+  },
+  async sendInvoice(input) {
+    const res = await fetch('https://my-api.pl/invoices', {
+      method: 'POST',
+      body: input.xml,
+    })
+    return res.json()
+  },
+  async getUpo(ref) {
+    const res = await fetch(`https://my-api.pl/upo/${ref}`)
+    return res.json()
+  },
+}
+
+const ksefnik = createKsefnik({
+  config: { nip: '1234567890', environment: 'production' },
+  adapter: myAdapter,
+})
+```
+
+### Z automatycznym ładowaniem pluginów
+
+```typescript
+const ksefnik = createKsefnik({
+  config: {
+    nip: '1234567890',
+    environment: 'production',
+    plugins: ['@ksefnik/pro-reconciliation', '@ksefnik/pro-analytics'],
+  },
+})
+
+// Pluginy są ładowane leniwie — brak pakietu = brak feature (bez błędu)
+for (const name of ksefnik.config?.plugins ?? []) {
+  await ksefnik.plugins.load(name)
+}
+```
+
+<Aside type="caution">
+  `createKsefnik()` nie ładuje pluginów automatycznie. Musisz wywołać `plugins.load()` dla każdego pakietu z listy `config.plugins`.
+</Aside>

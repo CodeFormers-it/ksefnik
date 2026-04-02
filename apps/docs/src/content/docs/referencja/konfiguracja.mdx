@@ -1,0 +1,182 @@
+---
+title: Konfiguracja
+description: Kompletna referencja opcji konfiguracji KsefnikConfig i zmiennych środowiskowych.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components'
+
+Interfejs `KsefnikConfig` definiuje opcje konfiguracji przekazywane do `createKsefnik()`.
+
+## KsefnikConfig
+
+```typescript
+interface KsefnikConfig {
+  nip: string
+  environment: 'production' | 'demo' | 'test'
+  token?: string
+  storage?: 'memory' | 'sqlite'
+  sqlitePath?: string
+  plugins?: string[]
+  reconciliation?: {
+    minConfidence?: number
+    enabledPasses?: string[]
+  }
+}
+```
+
+### Pola
+
+| Pole | Typ | Wymagane | Domyślnie | Opis |
+|------|-----|----------|-----------|------|
+| `nip` | `string` | tak | — | NIP firmy (10 cyfr) |
+| `environment` | `'production' \| 'demo' \| 'test'` | tak | — | Środowisko KSeF |
+| `token` | `string` | nie | — | Token API KSeF (wymagany dla `production` i `demo`) |
+| `storage` | `'memory' \| 'sqlite'` | nie | `'memory'` | Typ storage |
+| `sqlitePath` | `string` | nie | `'./ksefnik.db'` | Ścieżka do pliku SQLite |
+| `plugins` | `string[]` | nie | `[]` | Nazwy pakietów pluginów do załadowania |
+| `reconciliation` | `object` | nie | — | Opcje pipeline uzgadniania |
+
+### Opcje reconciliation
+
+| Pole | Typ | Domyślnie | Opis |
+|------|-----|-----------|------|
+| `minConfidence` | `number` | `0` | Minimalna pewność dopasowania (0-100). Dopasowania poniżej są odrzucane. |
+| `enabledPasses` | `string[]` | wszystkie | Lista nazw passów do włączenia. Pominięte passy nie będą uruchamiane. |
+
+## Środowiska KSeF
+
+<Tabs>
+  <TabItem label="production">
+    ```typescript
+    const ksefnik = createKsefnik({
+      config: {
+        nip: '1234567890',
+        environment: 'production',
+        token: process.env.KSEFNIK_TOKEN,
+      },
+    })
+    ```
+    Wymaga tokena. Komunikacja z produkcyjnym API KSeF pod `https://ksef.mf.gov.pl`.
+  </TabItem>
+  <TabItem label="demo">
+    ```typescript
+    const ksefnik = createKsefnik({
+      config: {
+        nip: '1234567890',
+        environment: 'demo',
+        token: process.env.KSEFNIK_TOKEN,
+      },
+    })
+    ```
+    Testowe API KSeF pod `https://ksef-demo.mf.gov.pl`. Wymaga tokena.
+  </TabItem>
+  <TabItem label="test">
+    ```typescript
+    const ksefnik = createKsefnik({
+      config: {
+        nip: '1234567890',
+        environment: 'test',
+      },
+    })
+    ```
+    Do testów lokalnych. Nie wymaga tokena. Używaj z symulatorem.
+  </TabItem>
+</Tabs>
+
+## Zmienne środowiskowe
+
+Ksefnik odczytuje konfigurację ze zmiennych środowiskowych (priorytet niższy niż jawna konfiguracja):
+
+| Zmienna | Mapowanie | Przykład |
+|---------|-----------|---------|
+| `KSEFNIK_NIP` | `config.nip` | `1234567890` |
+| `KSEFNIK_ENV` | `config.environment` | `production` |
+| `KSEFNIK_TOKEN` | `config.token` | `eyJhbG...` |
+
+### Przykład z .env
+
+```bash
+# .env
+KSEFNIK_NIP=1234567890
+KSEFNIK_ENV=production
+KSEFNIK_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+<Aside type="caution">
+  Nigdy nie commituj tokenów KSeF do repozytorium. Użyj `.env` (dodanego do `.gitignore`) lub secrets managera.
+</Aside>
+
+## Storage
+
+<Tabs>
+  <TabItem label="InMemoryStorage">
+    ```typescript
+    const ksefnik = createKsefnik({
+      config: {
+        nip: '1234567890',
+        environment: 'test',
+        storage: 'memory',
+      },
+    })
+    ```
+    Domyślny. Dane znikają po zakończeniu procesu. Idealny do testów i jednorazowych skryptów.
+  </TabItem>
+  <TabItem label="SqliteStorage">
+    ```typescript
+    const ksefnik = createKsefnik({
+      config: {
+        nip: '1234567890',
+        environment: 'production',
+        storage: 'sqlite',
+        sqlitePath: './data/ksefnik.db',
+      },
+    })
+    ```
+    Dane persystowane na dysku. Plik SQLite tworzony automatycznie. Idealny do CLI i ciągłych procesów.
+  </TabItem>
+  <TabItem label="Własna implementacja">
+    ```typescript
+    import type { Storage } from '@ksefnik/shared'
+
+    const myStorage: Storage = {
+      async saveInvoices(invoices) { /* ... */ },
+      async getInvoices(query) { /* ... */ },
+      async saveTransactions(txs) { /* ... */ },
+      async getTransactions(query) { /* ... */ },
+      async saveReport(report) { /* ... */ },
+      async getReport(id) { /* ... */ },
+    }
+
+    const ksefnik = createKsefnik({
+      config: { nip: '1234567890', environment: 'test' },
+      storage: myStorage,
+    })
+    ```
+  </TabItem>
+</Tabs>
+
+## Konfiguracja pipeline uzgadniania
+
+```typescript
+const ksefnik = createKsefnik({
+  config: {
+    nip: '1234567890',
+    environment: 'production',
+    reconciliation: {
+      // Odrzucaj dopasowania z confidence < 50
+      minConfidence: 50,
+      // Używaj tylko pewnych passów (wyłącz fuzzy i proximity)
+      enabledPasses: [
+        'ksef-ref',
+        'exact-nip-amount',
+        'invoice-ref',
+        'partial-amount',
+      ],
+    },
+  },
+})
+```
+
+<Aside>
+  Jeśli `enabledPasses` nie jest podane, wszystkie passy (core + plugin) są aktywne.
+</Aside>

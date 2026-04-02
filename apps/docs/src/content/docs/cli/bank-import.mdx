@@ -1,0 +1,79 @@
+---
+title: "Komenda: bank import"
+description: Import wyciągów bankowych z automatycznym wykrywaniem formatu.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Komenda `bank import` wczytuje wyciąg bankowy z pliku CSV lub MT940 i parsuje go do ujednoliconego formatu transakcji.
+
+## Użycie
+
+```bash
+ksefnik bank import <plik> [--format json|table]
+```
+
+## Parametry
+
+| Parametr | Wymagany | Opis |
+|----------|----------|------|
+| `<plik>` | Tak | Ścieżka do pliku wyciągu bankowego |
+| `--format` | Nie | Format wyjścia: `json` lub `table` (domyślnie) |
+
+## Obsługiwane formaty
+
+Format pliku jest wykrywany automatycznie na podstawie struktury nagłówków i treści:
+
+| Bank | Format |
+|------|--------|
+| mBank | CSV |
+| ING Bank Śląski | CSV |
+| PKO BP | CSV |
+| Santander | CSV |
+| Dowolny | MT940 (SWIFT) |
+
+## Przykłady
+
+```bash
+# Import wyciągu z mBanku
+ksefnik bank import ./wyciag-mbank-03-2026.csv
+
+# Wynik:
+# Wykryto format: mBank CSV
+# Zaimportowano: 47 transakcji
+#
+# ┌────────────┬──────────────┬────────────────────────────────┬───────┐
+# │ Data       │ Kwota        │ Opis                           │ Bank  │
+# ├────────────┼──────────────┼────────────────────────────────┼───────┤
+# │ 2026-03-01 │ -1 230,00 PLN│ Przelew do ACME Sp. z o.o.    │ mBank │
+# │ 2026-03-02 │  5 000,00 PLN│ Wpłata od Kontrahent S.A.     │ mBank │
+# │ 2026-03-03 │   -615,00 PLN│ FV/2026/03/005 NIP 9876543210 │ mBank │
+# └────────────┴──────────────┴────────────────────────────────┴───────┘
+```
+
+```bash
+# Import jako JSON
+ksefnik bank import ./wyciag.mt940 --format json
+```
+
+```json
+{
+  "transactions": [
+    {
+      "date": "2026-03-01",
+      "amount": -123000,
+      "description": "Przelew do ACME Sp. z o.o.",
+      "bank": "mt940"
+    }
+  ],
+  "count": 47
+}
+```
+
+<Aside type="tip">
+Kwoty w JSON są w groszach (123000 = 1230,00 PLN). Wartości ujemne oznaczają przelewy wychodzące, dodatnie -- przychodzące.
+</Aside>
+
+<Aside>
+Jeśli automatyczna detekcja formatu nie zadziała, sprawdź czy plik ma prawidłowe kodowanie (UTF-8) i separator. Więcej informacji w sekcji Parsery bankowe.
+</Aside>

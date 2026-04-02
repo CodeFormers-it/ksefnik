@@ -1,0 +1,119 @@
+---
+title: Auto-detekcja formatu
+description: Jak działa automatyczne wykrywanie formatu wyciągu bankowego.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components'
+import BankFormatDetector from '../../../components/BankFormatDetector'
+
+Ksefnik automatycznie rozpoznaje format wyciągu bankowego na podstawie treści pliku. Nie musisz ręcznie podawać, z którego banku pochodzi wyciąg.
+
+## Funkcja detectBankFormat
+
+```typescript
+import { detectBankFormat } from '@ksefnik/core'
+
+type BankFormat = 'mt940' | 'mbank' | 'ing' | 'pko' | 'santander'
+
+function detectBankFormat(content: string): BankFormat | null
+```
+
+Zwraca identyfikator formatu lub `null`, jeśli treść nie pasuje do żadnego znanego formatu.
+
+## Kolejność sprawdzania
+
+Detekcja odbywa się na pierwszych **2000 znakach** treści, w następującej kolejności:
+
+<Steps>
+1. **MT940** -- czy treść zawiera pola SWIFT `:20:` + `:60F:` / `:61:`, lub zaczyna się od `{1:`
+2. **mBank** -- czy nagłówki zawierają `#Data operacji` + `#Opis operacji`
+3. **ING** -- czy nagłówki zawierają `"Data transakcji"` + `"Dane kontrahenta"`
+4. **PKO BP** -- czy nagłówki zawierają `"Data operacji"` + `"Typ transakcji"`
+5. **Santander** -- czy nagłówki zawierają `Data operacji;Data waluty;Tytu` + `Nadawca/Odbiorca`
+</Steps>
+
+Kolejność ma znaczenie -- pierwszy pasujący format wygrywa.
+
+## Funkcje importu
+
+### importBankStatement (z pliku)
+
+```typescript
+import { importBankStatement } from '@ksefnik/core'
+
+const transactions = await importBankStatement('./wyciag.csv')
+```
+
+Czyta plik z dysku i automatycznie wykrywa format.
+
+### importBankStatementFromString (z tekstu)
+
+```typescript
+import { importBankStatementFromString } from '@ksefnik/core'
+
+const content = await fetch('https://api.bank.pl/export').then(r => r.text())
+const transactions = await importBankStatementFromString(content)
+```
+
+Parsuje treść przekazaną jako string.
+
+### Własne parsery
+
+Obie funkcje akceptują opcjonalną listę parserów:
+
+```typescript
+import { importBankStatementFromString, getDefaultParsers } from '@ksefnik/core'
+import { MojBankParser } from './moj-bank.parser.js'
+
+const parsers = [...getDefaultParsers(), new MojBankParser()]
+const transactions = await importBankStatementFromString(content, { parsers })
+```
+
+## Nierozpoznany format
+
+Jeśli żaden parser nie rozpozna treści, obie funkcje rzucają `UnsupportedBankFormatError`:
+
+```typescript
+import { UnsupportedBankFormatError } from '@ksefnik/shared'
+
+try {
+  const transactions = await importBankStatement('./nieznany.csv')
+} catch (err) {
+  if (err instanceof UnsupportedBankFormatError) {
+    console.error('Nieobsługiwany format bankowy:', err.message)
+  }
+}
+```
+
+<Aside type="tip">
+  Jeśli format Twojego banku nie jest obsługiwany, możesz [napisać własny parser](/parsery-bankowe/obslugiwane-formaty/#jak-dodać-nowy-parser) i przekazać go w opcji `parsers`.
+</Aside>
+
+## Jak działa wewnętrznie
+
+Mechanizm detekcji iteruje po liście parserów i wywołuje `canParse()` na każdym z nich:
+
+```typescript
+export async function importBankStatementFromString(
+  content: string,
+  opts?: ImportBankStatementOpts,
+): Promise<BankTransaction[]> {
+  const parsers = opts?.parsers ?? getDefaultParsers()
+
+  for (const parser of parsers) {
+    if (await parser.canParse(content)) {
+      return parser.parse(content)
+    }
+  }
+
+  throw new UnsupportedBankFormatError('unknown')
+}
+```
+
+Domyślna kolejność parserów odpowiada kolejności detekcji: MT940, mBank, ING, PKO, Santander.
+
+## Wypróbuj detektor
+
+Wklej fragment wyciągu bankowego i zobacz jak działa auto-detekcja:
+
+<BankFormatDetector client:visible />

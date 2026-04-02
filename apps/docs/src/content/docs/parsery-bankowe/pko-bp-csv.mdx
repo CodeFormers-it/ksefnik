@@ -1,0 +1,104 @@
+---
+title: PKO BP CSV
+description: Parser formatu CSV z PKO Banku Polskiego w ksefnik.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Parser `PkoParser` obsługuje format CSV z PKO Banku Polskiego. Wyróżnia się użyciem przecinka jako separatora (zamiast średnika) oraz dedykowaną kolumną NIP.
+
+## Specyfikacja formatu
+
+| Cecha | Wartość |
+|-------|--------|
+| Separator | `,` (przecinek) |
+| Kodowanie | UTF-8 (z opcjonalnym BOM) |
+| Format daty | `YYYY-MM-DD` |
+| Format kwoty | `-1230.00` (angielski, z kropką) |
+| Nagłówki | W cudzysłowach |
+
+## Kolumny
+
+| # | Nagłówek | Mapowanie |
+|---|----------|-----------|
+| 1 | `"Data operacji"` | `date` |
+| 2 | `"Data waluty"` | (pomijane) |
+| 3 | `"Typ transakcji"` | (pomijane) |
+| 4 | `"Kwota"` | `amount` (w groszach) |
+| 5 | `"Waluta"` | (pomijane) |
+| 6 | `"Saldo po transakcji"` | (pomijane) |
+| 7 | `"Opis nadawcy"` | `recipientName` / `senderName` |
+| 8 | `"Tytuł"` | `description` |
+| 9 | `"NIP"` | NIP kontrahenta |
+
+## Detekcja
+
+```typescript
+content.includes('"Data operacji"') && content.includes('"Typ transakcji"')
+```
+
+## Dedykowana kolumna NIP
+
+PKO BP jako jedyny z obsługiwanych banków udostępnia dedykowaną kolumnę `"NIP"`. Parser najpierw sprawdza tę kolumnę, a dopiero w razie jej braku szuka NIP w opisie:
+
+```typescript
+const nip = nipRaw?.match(/^\d{10}$/)?.[0]
+  ?? extractFirstNIP(`${counterparty ?? ''} ${description}`)
+```
+
+<Aside type="tip">
+  Dedykowana kolumna NIP oznacza wyższą skuteczność ekstrakcji NIP dla wyciągów z PKO BP w porównaniu z innymi bankami.
+</Aside>
+
+## Kwoty
+
+PKO BP używa formatu angielskiego z kropką jako separatorem dziesiętnym:
+
+```typescript
+// Wejście: "-1230.00"
+// parseFloat: -1230.0
+// * 100 = -123000 groszy
+```
+
+<Aside type="caution">
+  To jedyny parser, który przyjmuje kwoty z kropką zamiast przecinka. Funkcja `parseAmount()` obsługuje oba formaty automatycznie.
+</Aside>
+
+## Przykład CSV
+
+```csv
+"Data operacji","Data waluty","Typ transakcji","Kwota","Waluta","Saldo po transakcji","Opis nadawcy","Tytuł","NIP"
+"2026-03-01","2026-03-01","Przelew wychodzący","-1230.00","PLN","48770.00","ACME SP Z O O","Faktura FV/2026/03/001","5213456789"
+"2026-03-05","2026-03-05","Przelew przychodzący","5000.00","PLN","53770.00","BETA SP Z O O","Zaplata za usluge",""
+```
+
+## Sparsowany wynik
+
+```typescript
+[
+  {
+    date: '2026-03-01',
+    amount: -123000,
+    description: 'Faktura FV/2026/03/001',
+    recipientName: 'ACME SP Z O O',
+    recipientNIP: '5213456789',  // z dedykowanej kolumny NIP
+    bank: 'pko',
+  },
+  {
+    date: '2026-03-05',
+    amount: 500000,
+    description: 'Zaplata za usluge',
+    senderName: 'BETA SP Z O O',
+    senderNIP: undefined,
+    bank: 'pko',
+  },
+]
+```
+
+## Użycie
+
+```typescript
+import { importBankStatement } from '@ksefnik/core'
+
+const transactions = await importBankStatement('./pko-wyciag.csv')
+```

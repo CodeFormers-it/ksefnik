@@ -1,0 +1,114 @@
+---
+title: Ekstrakcja NIP
+description: Jak ksefnik wyciąga numery NIP z opisów przelewów.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components'
+
+Ekstrakcja NIP z opisów przelewów bankowych to kluczowy element uzgadniania faktur z transakcjami. Ksefnik stosuje 3 strategie ekstrakcji, sprawdzane w kolejności od najbardziej do najmniej pewnej.
+
+## Strategie ekstrakcji
+
+<Steps>
+1. **MPP structured** -- wzorce `/NIP/1234567890/` i `/IDC/1234567890/` z przelewów w mechanizmie podzielonej płatności
+2. **Prefixed** -- wzorzec `NIP: 1234567890`, `NIP 1234567890` lub `NIP1234567890`
+3. **Raw 10-digit** -- dowolna sekwencja 10 cyfr z poprawną sumą kontrolną NIP
+</Steps>
+
+## Funkcje API
+
+### extractNIPs
+
+Zwraca tablicę wszystkich znalezionych NIP-ów (bez duplikatów):
+
+```typescript
+import { extractNIPs } from '@ksefnik/core'
+
+const nips = extractNIPs('Przelew /NIP/5213456789/ za FV NIP: 7811234567')
+// ['5213456789', '7811234567']
+```
+
+### extractFirstNIP
+
+Zwraca pierwszy znaleziony NIP lub `undefined`:
+
+```typescript
+import { extractFirstNIP } from '@ksefnik/core'
+
+const nip = extractFirstNIP('Faktura od ACME NIP5213456789')
+// '5213456789'
+```
+
+## Strategia 1: MPP structured
+
+Wzorce z mechanizmu podzielonej płatności (split payment):
+
+```
+/VAT/230,00/IDC/5213456789/INV/FV/2026/03/001/TXT/Faktura
+/NIP/5213456789/
+```
+
+Regex: `/\/NIP\/(\d{10})\//` i `/\/IDC\/(\d{10})\//`
+
+<Aside type="note">
+  Strategie 1 i 2 **nie walidują sumy kontrolnej** -- ufają strukturze formatu. Tylko strategia 3 (raw) wymaga poprawnego checksum.
+</Aside>
+
+## Strategia 2: Prefixed
+
+Wzorzec `NIP` z opcjonalnym dwukropkiem i spacją:
+
+```
+NIP: 5213456789
+NIP 5213456789
+NIP5213456789
+```
+
+Regex: `/NIP[:\s]*(\d{10})/gi` (case-insensitive, global)
+
+## Strategia 3: Raw 10-digit z walidacją
+
+Każda sekwencja 10 cyfr otoczona granicami słów:
+
+```
+Przelew od firmy 5213456789 za uslugi
+```
+
+Regex: `/\b(\d{10})\b/g`
+
+Ta strategia **wymaga poprawnej sumy kontrolnej NIP** (`isValidNIP`), żeby odfiltrować przypadkowe ciągi 10 cyfr (np. numery rachunków, kody referencyjne).
+
+## Walidacja sumy kontrolnej NIP
+
+```typescript
+const NIP_WEIGHTS = [6, 5, 7, 2, 3, 4, 5, 6, 7]
+
+function isValidNIP(nip: string): boolean {
+  if (!/^\d{10}$/.test(nip)) return false
+  const digits = nip.split('').map(Number)
+  const sum = NIP_WEIGHTS.reduce((acc, weight, i) => acc + weight * digits[i]!, 0)
+  return sum % 11 === digits[9]
+}
+```
+
+Wagi `[6, 5, 7, 2, 3, 4, 5, 6, 7]` są mnożone przez pierwsze 9 cyfr NIP. Suma modulo 11 musi być równa 10. cyfrze (cyfrze kontrolnej).
+
+## Przykłady z różnych formatów
+
+| Źródło | Tekst przelewu | Wynik |
+|--------|---------------|-------|
+| MPP | `/NIP/5213456789/` | `5213456789` |
+| mBank | `ACME SP Z O O NIP5213456789` | `5213456789` |
+| ING | `NIP5213456789 Szczegóły` | `5213456789` |
+| PKO BP | kolumna `"NIP"`: `5213456789` | `5213456789` |
+| Santander | `FIRMA NIP: 5213456789` | `5213456789` |
+| MT940 | `~38NIP5213456789` | `5213456789` |
+
+## Kolejność deduplikacji
+
+Funkcja `extractNIPs()` używa `Set`, więc ten sam NIP znaleziony różnymi strategiami pojawi się tylko raz. Kolejność to: MPP, potem prefixed, potem raw:
+
+```typescript
+const nips = extractNIPs('/NIP/5213456789/ Faktura NIP5213456789')
+// ['5213456789']  -- jeden wynik, bez duplikatu
+```

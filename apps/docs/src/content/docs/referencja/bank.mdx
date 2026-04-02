@@ -1,0 +1,137 @@
+---
+title: "Namespace: bank"
+description: Dokumentacja namespace bank — import i listowanie transakcji bankowych.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components'
+
+Namespace `bank` odpowiada za import wyciągów bankowych z automatyczną detekcją formatu i ekstrakcją NIP-ów z opisów transakcji.
+
+## importFromString()
+
+Parsuje wyciąg bankowy z tekstu, automatycznie wykrywając format. Zapisuje transakcje do storage.
+
+```typescript
+async importFromString(
+  content: string,
+  opts?: ImportBankStatementOpts,
+): Promise<BankTransaction[]>
+```
+
+### ImportBankStatementOpts
+
+| Pole | Typ | Wymagane | Opis |
+|------|-----|----------|------|
+| `parsers` | `BankStatementParser[]` | nie | Własna lista parserów (domyślnie `getDefaultParsers()`) |
+
+### Domyślne parsery
+
+Funkcja `getDefaultParsers()` zwraca parsery w kolejności detekcji:
+
+| Parser | Bank | Format |
+|--------|------|--------|
+| MT940 | Dowolny | SWIFT MT940 |
+| mBank | mBank | CSV |
+| ING | ING Bank Śląski | CSV |
+| PKO | PKO BP | CSV |
+| Santander | Santander Bank Polska | CSV |
+
+### Przykład
+
+<Tabs>
+  <TabItem label="Auto-detect">
+    ```typescript
+    import { readFileSync } from 'node:fs'
+
+    const content = readFileSync('./wyciag.csv', 'utf-8')
+    const transactions = await ksefnik.bank.importFromString(content)
+
+    console.log(`Zaimportowano ${transactions.length} transakcji`)
+    console.log(`Bank: ${transactions[0]?.bank}`)
+    ```
+  </TabItem>
+  <TabItem label="Z własnym parserem">
+    ```typescript
+    import type { BankStatementParser } from '@ksefnik/shared'
+
+    const milleniumParser: BankStatementParser = {
+      bank: 'millenium',
+      async canParse(content) {
+        return typeof content === 'string' && content.includes('Millenium')
+      },
+      async parse(content) {
+        // Implementacja parsowania...
+        return transactions
+      },
+    }
+
+    const transactions = await ksefnik.bank.importFromString(content, {
+      parsers: [milleniumParser, ...getDefaultParsers()],
+    })
+    ```
+  </TabItem>
+</Tabs>
+
+<Aside type="tip">
+  Auto-detekcja iteruje po parserach w kolejności i używa pierwszego, który zwróci `true` z `canParse()`.
+  Jeśli żaden parser nie pasuje, metoda rzuci `UnsupportedBankFormatError`.
+</Aside>
+
+## list()
+
+Zwraca transakcje zapisane w storage (zaimportowane wcześniej przez `importFromString()`).
+
+```typescript
+async list(): Promise<BankTransaction[]>
+```
+
+### Przykład
+
+```typescript
+// Import z pliku
+const content = readFileSync('./wyciag-mbank.csv', 'utf-8')
+await ksefnik.bank.importFromString(content)
+
+// Odczyt ze storage
+const transactions = await ksefnik.bank.list()
+
+for (const tx of transactions) {
+  const amount = (tx.amount / 100).toFixed(2)
+  console.log(`${tx.date} | ${amount} PLN | ${tx.description}`)
+}
+```
+
+## Ekstrakcja NIP
+
+Parsery automatycznie wyciągają NIP-y z opisów transakcji i ustawiają pola `senderNIP` / `recipientNIP`. Obsługiwane formaty NIP w opisach:
+
+- `NIP: 1234567890`
+- `NIP 123-456-78-90`
+- `NIP1234567890`
+- 10-cyfrowa sekwencja z poprawną sumą kontrolną
+
+## Pełny przepływ
+
+```typescript
+import { createKsefnik } from '@ksefnik/core'
+import { readFileSync } from 'node:fs'
+
+const ksefnik = createKsefnik({
+  config: { nip: '1234567890', environment: 'test' },
+})
+
+// 1. Import wyciągów z różnych banków
+const mt940 = readFileSync('./mt940.sta', 'utf-8')
+const mbank = readFileSync('./mbank-export.csv', 'utf-8')
+
+const txMt940 = await ksefnik.bank.importFromString(mt940)
+const txMbank = await ksefnik.bank.importFromString(mbank)
+
+// 2. Wszystkie transakcje w storage
+const all = await ksefnik.bank.list()
+console.log(`Łącznie: ${all.length} transakcji`)
+
+// 3. Użyj w uzgadnianiu
+const invoices = await ksefnik.invoices.list()
+const report = await ksefnik.reconciliation.run(invoices, all)
+```

@@ -1,0 +1,139 @@
+---
+title: Session Manager
+description: Automatyczne zarzadzanie i odnawianie sesji KSeF.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components'
+
+## Problem
+
+Sesja KSeF ma ograniczony czas zycia. Jesli wygasnie w trakcie operacji, dostaniesz blad autoryzacji. Reczne sledzenie czasu wygasniecia jest klopliwe.
+
+## Rozwiazanie: SessionManager
+
+`SessionManager` automatycznie inicjalizuje i odnawia sesje:
+
+```ts
+import { SessionManager } from '@ksefnik/core'
+
+const sessions = new SessionManager(client, config, {
+  renewThresholdMs: 60_000, // odnow 60s przed wygasnieciem
+})
+
+// Zawsze zwraca aktywna sesje
+const session = await sessions.ensure()
+```
+
+## API
+
+```ts
+class SessionManager {
+  constructor(
+    client: KsefClient,
+    config: KsefClientConfig,
+    opts?: SessionManagerOptions,
+  )
+
+  ensure(): Promise<KsefSessionState>    // pobierz lub odnow sesje
+  close(): Promise<void>                 // zamknij sesje
+  get current(): KsefSessionState | null // biezaca sesja
+  get isActive(): boolean                // czy sesja jest aktywna
+}
+```
+
+| Metoda | Opis |
+|--------|------|
+| `ensure()` | Zwraca aktualna sesje. Jesli nie istnieje lub wkrotce wygasnie -- tworzy nowa. |
+| `close()` | Zamyka sesje i zwalnia token. Bezpieczna do wielokrotnego wywolania. |
+| `current` | Getter -- biezacy stan sesji lub `null`. |
+| `isActive` | Getter -- `true` jesli sesja istnieje i nie wygasla. |
+
+## Opcje
+
+```ts
+interface SessionManagerOptions {
+  renewThresholdMs?: number  // domyslnie 60 000 ms (60 sekund)
+}
+```
+
+`renewThresholdMs` okresla, ile milisekund **przed** wygasnieciem sesja zostanie odnowiona. Domyslnie 60 sekund -- wystarczajaco dlugo, zeby nowa sesja zdazyla sie zainicjalizowac.
+
+## Flow: ensure()
+
+<Steps>
+1. Sprawdz czy sesja istnieje
+2. Jesli nie -- zainicjalizuj nowa i zwroc
+3. Jesli tak -- sprawdz czas do wygasniecia
+4. Jesli czas < `renewThresholdMs` -- zamknij stara, zainicjalizuj nowa
+5. Zwroc aktualna sesje
+</Steps>
+
+```ts
+async ensure(): Promise<KsefSessionState> {
+  if (!this.session) {
+    this.session = await this.client.initSession(this.config)
+    return this.session
+  }
+
+  const timeLeft = this.session.expiresAt.getTime() - Date.now()
+  if (timeLeft < this.renewThresholdMs) {
+    await this.close()
+    this.session = await this.client.initSession(this.config)
+  }
+
+  return this.session
+}
+```
+
+## Przyklad: dlugotrwaly skrypt
+
+```ts
+import { SessionManager, KsefAdapterImpl } from '@ksefnik/core'
+
+const sessions = new SessionManager(client, {
+  nip: '5213456784',
+  environment: 'production',
+  token: process.env.KSEF_TOKEN!,
+}, {
+  renewThresholdMs: 120_000, // 2 minuty zapasu
+})
+
+async function processMonthlyInvoices() {
+  // ensure() zainicjalizuje sesje przy pierwszym wywolaniu
+  const session = await sessions.ensure()
+
+  for (const month of months) {
+    // ensure() automatycznie odnowi sesje jesli trzeba
+    await sessions.ensure()
+
+    const invoices = await client.fetchInvoices({
+      token: sessions.current!.token,
+      dateFrom: month.from,
+      dateTo: month.to,
+    })
+    // ... przetwarzanie
+  }
+
+  // Zamknij sesje po zakonczeniu
+  await sessions.close()
+}
+```
+
+## Integracja z adapterem
+
+```ts
+const sessions = new SessionManager(client, config)
+const adapter = new KsefAdapterImpl(client, config)
+
+// Przed kazdym zapytaniem upewnij sie, ze sesja jest aktywna
+await sessions.ensure()
+const invoices = await adapter.fetchInvoices({ from: '2026-03-01', to: '2026-03-31' })
+```
+
+<Aside type="tip">
+  W wiekszosci przypadkow nie musisz uzywac `SessionManager` bezposrednio. Fasada `createKsefnik()` zarzadza sesja automatycznie. `SessionManager` jest przydatny, gdy budujesz wlasny workflow lub integracje.
+</Aside>
+
+<Aside type="caution">
+  `SessionManager` nie obsluguje wspolbieznosci. Jesli kilka watkow/promise'ow wywola `ensure()` jednoczesnie, moze dojsc do wyścigu. W takim scenariuszu uzyj zewnetrznego mechanizmu synchronizacji.
+</Aside>

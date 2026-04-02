@@ -1,0 +1,87 @@
+---
+title: "Scenariusz: timeout"
+description: Symulacja timeoutów połączenia z KSeF API.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Scenariusz `timeout` symuluje sytuację, w której API KSeF nie odpowiada w wymaganym czasie. Przydatny do testowania logiki ponawiania zapytań (retry) i odporności aplikacji na awarie sieci.
+
+## Zachowanie
+
+| Operacja | Rezultat |
+|----------|----------|
+| `fetchInvoices` | Opóźnienie + `KsefTimeoutError` |
+| `sendInvoice` | Opóźnienie + `KsefTimeoutError` |
+| `getUpo` | Działa normalnie |
+
+## Hooks
+
+Scenariusz rejestruje hooki `beforeFetch` i `beforeSend`, które wprowadzają opóźnienie, a następnie rzucają `KsefTimeoutError`.
+
+## Parametry
+
+| Parametr | Typ | Domyślnie | Opis |
+|----------|-----|-----------|------|
+| `delayMs` | `number` | `10000` | Czas opóźnienia przed rzuceniem błędu |
+
+<Aside type="caution">
+W testach ustaw `delayMs` na niską wartość (np. 100ms), aby testy nie trwały zbyt długo.
+</Aside>
+
+## Przykład
+
+```ts
+import { createKsefSimulator } from '@ksefnik/simulator'
+import { createKsefnik } from '@ksefnik/core'
+
+const { adapter } = createKsefSimulator({
+  scenario: 'timeout',
+  delayMs: 100, // 100ms w testach
+})
+
+const ksefnik = createKsefnik({
+  nip: '1234567890',
+  adapter,
+})
+
+// Bez retry -- błąd
+try {
+  await ksefnik.invoices.sync({
+    dateFrom: '2026-03-01',
+    dateTo: '2026-03-31',
+  })
+} catch (error) {
+  console.log(error.name) // "KsefTimeoutError"
+  console.log(error.message) // "Request timed out after 100ms"
+}
+```
+
+## Testowanie z retry
+
+```ts
+import { withRetry } from '@ksefnik/core'
+
+// withRetry automatycznie ponawia zapytania przy timeout
+const ksefnik = createKsefnik({
+  nip: '1234567890',
+  adapter: withRetry(adapter, {
+    maxRetries: 3,
+    baseDelay: 50,
+  }),
+})
+
+// Po 3 nieudanych próbach rzuci KsefTimeoutError
+try {
+  await ksefnik.invoices.sync({
+    dateFrom: '2026-03-01',
+    dateTo: '2026-03-31',
+  })
+} catch (error) {
+  console.log(error.retryCount) // 3
+}
+```
+
+<Aside>
+Scenariusz `timeout` zawsze kończy się błędem. Jeśli potrzebujesz symulować timeout tylko na pierwszym zapytaniu, użyj własnego scenariusza z hookiem warunkowym.
+</Aside>

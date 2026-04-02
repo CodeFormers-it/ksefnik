@@ -1,0 +1,122 @@
+---
+title: Santander CSV
+description: Parser formatu CSV z Santander Bank Polska w ksefnik.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Parser `SantanderParser` obsługuje format CSV z Santander Bank Polska. Wyróżnia się datami w formacie `DD-MM-YYYY` i nagłówkami bez cudzysłowów.
+
+## Specyfikacja formatu
+
+| Cecha | Wartość |
+|-------|--------|
+| Separator | `;` (średnik) |
+| Kodowanie | UTF-8 (z opcjonalnym BOM) |
+| Format daty | `DD-MM-YYYY` (np. `01-03-2026`) |
+| Format kwoty | `-1230,00` (polski, z przecinkiem) |
+| Nagłówki | Bez cudzysłowów |
+
+## Kolumny
+
+| # | Nagłówek | Mapowanie |
+|---|----------|-----------|
+| 1 | `Data operacji` | `date` (po konwersji) |
+| 2 | `Data waluty` | (pomijane) |
+| 3 | `Tytuł` | `description` |
+| 4 | `Nadawca/Odbiorca` | `recipientName` / `senderName` + NIP |
+| 5 | `Numer rachunku` | numer rachunku kontrahenta |
+| 6 | `Kwota operacji` | `amount` (w groszach) |
+| 7 | `Saldo po operacji` | (pomijane) |
+
+## Detekcja
+
+```typescript
+content.includes('Data operacji;Data waluty;Tytu')
+  && content.includes('Nadawca/Odbiorca')
+```
+
+<Aside type="note">
+  Nagłówek `Tytuł` jest obcięty do `Tytu` w warunku detekcji, ponieważ polskie znaki mogą mieć różne kodowania.
+</Aside>
+
+## Konwersja daty
+
+Santander używa formatu `DD-MM-YYYY`, odwrotnego do ISO:
+
+```typescript
+function formatSantanderDate(ddmmyyyy: string): string {
+  // 01-03-2026 -> 2026-03-01
+  const [dd, mm, yyyy] = ddmmyyyy.split('-')
+  return `${yyyy}-${mm}-${dd}`
+}
+```
+
+## NIP w polu Nadawca/Odbiorca
+
+Santander umieszcza NIP bezpośrednio w nazwie kontrahenta:
+
+```
+ACME SP Z O O NIP: 5213456789
+```
+
+Parser czyści nazwę z NIP-u:
+
+```typescript
+// "ACME SP Z O O NIP: 5213456789" -> "ACME SP Z O O"
+const cleanName = counterparty?.replace(/\s*NIP:\s*\d{10}/, '').trim()
+```
+
+Ekstrakcja NIP odbywa się z pól `Nadawca/Odbiorca` i `Tytuł`:
+
+```typescript
+const nip = extractFirstNIP(`${counterparty ?? ''} ${description}`)
+```
+
+## Numery rachunków
+
+Santander formatuje numery rachunków ze spacjami:
+
+```
+27 1140 2004 0000 3002 0135 5387
+```
+
+Jest to tylko cecha formatowania -- numer jest przekazywany w surowej postaci.
+
+## Przykład CSV
+
+```csv
+Data operacji;Data waluty;Tytuł;Nadawca/Odbiorca;Numer rachunku;Kwota operacji;Saldo po operacji
+01-03-2026;01-03-2026;Faktura FV/2026/03/001;ACME SP Z O O NIP: 5213456789;27 1140 2004 0000 3002 0135 5387;-1230,00;48770,00
+05-03-2026;05-03-2026;Zaplata za usluge;BETA SP Z O O;98 1050 1214 1000 0023 4567 8901;5000,00;53770,00
+```
+
+## Sparsowany wynik
+
+```typescript
+[
+  {
+    date: '2026-03-01',
+    amount: -123000,
+    description: 'Faktura FV/2026/03/001',
+    recipientName: 'ACME SP Z O O',     // bez "NIP: 5213456789"
+    recipientNIP: '5213456789',
+    bank: 'santander',
+  },
+  {
+    date: '2026-03-05',
+    amount: 500000,
+    description: 'Zaplata za usluge',
+    senderName: 'BETA SP Z O O',
+    bank: 'santander',
+  },
+]
+```
+
+## Użycie
+
+```typescript
+import { importBankStatement } from '@ksefnik/core'
+
+const transactions = await importBankStatement('./santander-wyciag.csv')
+```

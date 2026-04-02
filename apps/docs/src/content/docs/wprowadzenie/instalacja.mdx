@@ -1,0 +1,167 @@
+---
+title: Instalacja
+description: Wymagania systemowe i instalacja ksefnik
+---
+
+import { Tabs, TabItem, Steps, Aside, LinkCard } from '@astrojs/starlight/components'
+
+## Wymagania systemowe
+
+| Wymaganie | Wersja |
+|-----------|--------|
+| Node.js | **22** lub nowszy |
+| Menedżer pakietów | pnpm, npm lub yarn |
+| TypeScript | 5.0+ (zalecane, ale opcjonalne) |
+
+<Aside type="tip">
+  Projekt korzysta z pliku `.nvmrc` ustawionego na Node.js 22. Jeśli używasz nvm, wystarczy `nvm use` w katalogu projektu.
+</Aside>
+
+## Instalacja z npm
+
+Zainstaluj tylko te pakiety, których potrzebujesz:
+
+<Tabs>
+  <TabItem label="pnpm">
+    ```bash
+    # Minimum — SDK z silnikiem uzgadniania
+    pnpm add @ksefnik/core
+
+    # Symulator do developmentu i testów
+    pnpm add -D @ksefnik/simulator
+
+    # Serwer MCP do integracji z AI
+    pnpm add @ksefnik/mcp
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    # Minimum — SDK z silnikiem uzgadniania
+    npm install @ksefnik/core
+
+    # Symulator do developmentu i testów
+    npm install --save-dev @ksefnik/simulator
+
+    # Serwer MCP do integracji z AI
+    npm install @ksefnik/mcp
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```bash
+    # Minimum — SDK z silnikiem uzgadniania
+    yarn add @ksefnik/core
+
+    # Symulator do developmentu i testów
+    yarn add --dev @ksefnik/simulator
+
+    # Serwer MCP do integracji z AI
+    yarn add @ksefnik/mcp
+    ```
+  </TabItem>
+</Tabs>
+
+### Który pakiet wybrać?
+
+| Pakiet | Kiedy instalować |
+|--------|-----------------|
+| `@ksefnik/core` | Zawsze — to główny SDK z silnikiem uzgadniania, parserami bankowymi i walidacją |
+| `@ksefnik/simulator` | Do developmentu i testów — symuluje API KSeF offline, bez potrzeby tokena |
+| `@ksefnik/mcp` | Gdy chcesz używać ksefnik z asystentami AI (Claude, Cursor, Windsurf) |
+| `@ksefnik/shared` | Instalowany automatycznie jako zależność `@ksefnik/core` |
+| `@ksefnik/cli` | Zwykle nie instalujesz — używasz gotowej binarki lub `npx` |
+
+<Aside type="caution">
+  Pakiet `@ksef/client` (oficjalny klient API KSeF) nie jest jeszcze opublikowany na npm. W fazie developmentu i testów używaj **symulatora** (`@ksefnik/simulator`), który w pełni zastępuje prawdziwe API KSeF.
+</Aside>
+
+## Instalacja z monorepo (kontrybutorzy)
+
+Jeśli chcesz rozwijać ksefnik lub kontrybuować do projektu:
+
+<Steps>
+
+1. **Sklonuj repozytorium**
+
+   ```bash
+   git clone https://github.com/CodeFormers-it/ksefnik.git
+   cd ksefnik
+   ```
+
+2. **Zainstaluj zależności**
+
+   ```bash
+   pnpm install
+   ```
+
+3. **Zbuduj wszystkie pakiety**
+
+   ```bash
+   pnpm build
+   ```
+
+4. **Uruchom testy**
+
+   ```bash
+   pnpm test
+   ```
+
+   Powinienes zobaczyc wynik w stylu:
+
+   ```
+   ✓ packages/shared    12 tests passed
+   ✓ packages/core     198 tests passed
+   ✓ packages/simulator 42 tests passed
+   ✓ packages/mcp       38 tests passed
+
+   Test Files  4 passed
+   Tests      290 passed
+   ```
+
+5. **Uruchom w trybie watch** (opcjonalnie)
+
+   ```bash
+   pnpm dev
+   ```
+
+   Wszystkie pakiety będą przebudowywane automatycznie po zmianach.
+
+</Steps>
+
+## Weryfikacja instalacji
+
+Szybki test, czy SDK działa poprawnie:
+
+```typescript
+import { createKsefnik } from '@ksefnik/core'
+
+const ksef = createKsefnik({
+  config: { nip: '5213456784', environment: 'test' },
+})
+
+console.log('ksefnik gotowy:', ksef)
+// ksefnik gotowy: { invoices: {...}, bank: {...}, reconciliation: {...}, ... }
+```
+
+Jeśli widzisz obiekt z namespace'ami `invoices`, `bank`, `reconciliation` — instalacja przebiegla poprawnie.
+
+## Struktura monorepo
+
+```
+ksefnik/
+├── packages/
+│   ├── shared/        # @ksefnik/shared — schematy Zod, typy
+│   ├── core/          # @ksefnik/core — SDK, silnik, parsery
+│   ├── simulator/     # @ksefnik/simulator — mock KSeF
+│   └── mcp/           # @ksefnik/mcp — serwer MCP
+├── apps/
+│   ├── cli/           # @ksefnik/cli — interfejs konsolowy
+│   └── docs/          # Dokumentacja (ta strona)
+├── pnpm-workspace.yaml
+└── package.json
+```
+
+<LinkCard
+  title="Szybki start"
+  description="Uruchom pierwsze uzgadnianie faktur z przelewami w 5 minut."
+  href="/wprowadzenie/szybki-start/"
+/>

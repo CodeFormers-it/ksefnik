@@ -1,0 +1,152 @@
+---
+title: "Namespace: invoices"
+description: Dokumentacja namespace invoices — pobieranie, wysyłanie i listowanie faktur z KSeF.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components'
+
+Namespace `invoices` odpowiada za komunikację z KSeF API poprzez adapter. Pozwala pobierać, wysyłać i listować faktury.
+
+<Aside type="caution">
+  Metody `fetch()`, `send()` i `getUpo()` wymagają skonfigurowanego adaptera KSeF.
+  Wywołanie ich bez adaptera rzuci `Error('No KSeF adapter configured')`.
+</Aside>
+
+## fetch()
+
+Pobiera faktury z KSeF przez adapter i zapisuje je do storage.
+
+```typescript
+async fetch(opts: FetchInvoicesOpts): Promise<Invoice[]>
+```
+
+### FetchInvoicesOpts
+
+| Pole | Typ | Wymagane | Opis |
+|------|-----|----------|------|
+| `from` | `string` | tak | Data początkowa (format `YYYY-MM-DD`) |
+| `to` | `string` | tak | Data końcowa (format `YYYY-MM-DD`) |
+| `nip` | `string` | nie | Filtruj po NIP kontrahenta |
+| `pageSize` | `number` | nie | Rozmiar strony paginacji |
+| `pageOffset` | `number` | nie | Offset paginacji |
+
+### Przykład
+
+```typescript
+const invoices = await ksefnik.invoices.fetch({
+  from: '2025-01-01',
+  to: '2025-03-31',
+  nip: '9876543210',
+})
+
+console.log(`Pobrano ${invoices.length} faktur`)
+```
+
+## send()
+
+Wysyła fakturę do KSeF. Zwraca numer referencyjny KSeF i timestamp.
+
+```typescript
+async send(input: SendInvoiceInput): Promise<SendInvoiceResult>
+```
+
+### SendInvoiceInput
+
+| Pole | Typ | Wymagane | Opis |
+|------|-----|----------|------|
+| `xml` | `string` | tak | Faktura w formacie XML zgodnym z KSeF |
+| `nip` | `string` | tak | NIP wystawcy faktury |
+
+### SendInvoiceResult
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `ksefReference` | `string` | Numer referencyjny KSeF |
+| `timestamp` | `string` | Znacznik czasu przyjęcia |
+
+### Przykład
+
+```typescript
+const result = await ksefnik.invoices.send({
+  xml: invoiceXml,
+  nip: '1234567890',
+})
+
+console.log(`Faktura przyjęta: ${result.ksefReference}`)
+```
+
+## getUpo()
+
+Pobiera UPO (Urzędowe Poświadczenie Odbioru) dla faktury.
+
+```typescript
+async getUpo(ksefReference: string): Promise<UpoResult>
+```
+
+### UpoResult
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `ksefReference` | `string` | Numer referencyjny KSeF |
+| `upoXml` | `string` | UPO w formacie XML |
+| `status` | `'confirmed' \| 'pending' \| 'rejected'` | Status przetworzenia |
+
+### Przykład
+
+```typescript
+const upo = await ksefnik.invoices.getUpo('1234567890-20250101-ABC123DEF456')
+
+if (upo.status === 'confirmed') {
+  console.log('Faktura potwierdzona przez KSeF')
+} else if (upo.status === 'pending') {
+  console.log('Faktura w trakcie przetwarzania')
+}
+```
+
+## list()
+
+Zwraca faktury zapisane w storage (wcześniej pobrane przez `fetch()`).
+
+```typescript
+async list(): Promise<Invoice[]>
+```
+
+### Przykład
+
+```typescript
+// Najpierw pobierz z KSeF
+await ksefnik.invoices.fetch({ from: '2025-01-01', to: '2025-03-31' })
+
+// Później odczytaj ze storage (bez zapytania do API)
+const invoices = await ksefnik.invoices.list()
+```
+
+## Pełny przepływ
+
+```typescript
+import { createKsefnik } from '@ksefnik/core'
+import { createSimulatorAdapter } from '@ksefnik/simulator'
+
+const ksefnik = createKsefnik({
+  config: { nip: '1234567890', environment: 'test' },
+  adapter: createSimulatorAdapter({ scenario: 'happy-path' }),
+})
+
+// 1. Pobierz faktury
+const invoices = await ksefnik.invoices.fetch({
+  from: '2025-01-01',
+  to: '2025-12-31',
+})
+
+// 2. Wyślij nową fakturę
+const result = await ksefnik.invoices.send({
+  xml: '<Faktura>...</Faktura>',
+  nip: '1234567890',
+})
+
+// 3. Sprawdź UPO
+const upo = await ksefnik.invoices.getUpo(result.ksefReference)
+
+// 4. Listuj wszystkie z storage
+const all = await ksefnik.invoices.list()
+```

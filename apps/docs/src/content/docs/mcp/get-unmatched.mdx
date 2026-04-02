@@ -1,0 +1,76 @@
+---
+title: "Narzędzie: get-unmatched"
+description: Pobranie nieuzgodnionych faktur i transakcji z raportu.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Narzędzie `get-unmatched` zwraca szczegółowe informacje o fakturach i transakcjach, które nie zostały dopasowane w procesie uzgadniania.
+
+## Parametry wejściowe
+
+| Parametr | Typ | Wymagany | Opis |
+|----------|-----|----------|------|
+| `reportId` | `string` | Tak | Identyfikator raportu z `reconcile` |
+
+## Format odpowiedzi
+
+```ts
+{
+  unmatchedInvoices: Invoice[]
+  unmatchedTransactions: BankTransaction[]
+}
+```
+
+## Przykład wywołania
+
+```json
+{
+  "name": "get-unmatched",
+  "arguments": {
+    "reportId": "rpt-20260401-abc123"
+  }
+}
+```
+
+## Przykład odpowiedzi
+
+```json
+{
+  "unmatchedInvoices": [
+    {
+      "ksefReference": "KSeF-XYZ-789",
+      "invoiceNumber": "FV/2026/03/011",
+      "sellerNip": "1234567890",
+      "buyerNip": "6666666666",
+      "netAmount": 50000,
+      "grossAmount": 61500,
+      "issueDate": "2026-03-28"
+    }
+  ],
+  "unmatchedTransactions": [
+    {
+      "date": "2026-03-29",
+      "amount": -61500,
+      "description": "Przelew wychodzący",
+      "bank": "mbank"
+    }
+  ]
+}
+```
+
+## Kiedy używać
+
+- Po `reconcile`, gdy są nieuzgodnione pozycje
+- Gdy AI chce pomóc użytkownikowi ręcznie dopasować pozostałe pozycje
+- Do analizy, dlaczego pewne faktury nie zostały dopasowane
+
+<Aside type="tip">
+AI może porównać nieuzgodnione faktury z transakcjami i zasugerować ręczne dopasowania, które użytkownik potwierdzi przez `confirm-match`.
+</Aside>
+
+## Powiązane narzędzia
+
+- `reconcile` -- wygeneruj raport (potrzebne `reportId`)
+- `confirm-match` -- potwierdź ręczne dopasowanie
+- `query-invoices` -- wyszukaj dodatkowe informacje o fakturze

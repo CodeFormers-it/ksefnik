@@ -1,0 +1,86 @@
+---
+title: Przegląd komend CLI
+description: Przegląd wszystkich dostępnych komend w ksefnik CLI.
+---
+
+import { Tabs, TabItem, Aside, Card, CardGrid } from '@astrojs/starlight/components'
+
+Ksefnik CLI udostępnia 6 komend do pracy z fakturami KSeF i wyciągami bankowymi bezpośrednio z terminala.
+
+## Instalacja
+
+<Tabs>
+  <TabItem label="Globalnie">
+    ```bash
+    pnpm add -g @ksefnik/cli
+    ```
+  </TabItem>
+  <TabItem label="Jednorazowo">
+    ```bash
+    pnpm dlx @ksefnik/cli fetch --from 2026-03-01 --to 2026-03-31
+    ```
+  </TabItem>
+  <TabItem label="Binary">
+    ```bash
+    # Pobierz skompilowany plik binarny ze strony Releases
+    chmod +x ksefnik
+    ./ksefnik fetch --from 2026-03-01 --to 2026-03-31
+    ```
+  </TabItem>
+</Tabs>
+
+## Dostępne komendy
+
+| Komenda | Opis |
+|---------|------|
+| `ksefnik fetch` | Pobierz faktury z KSeF za podany okres |
+| `ksefnik send` | Wyślij fakturę XML do KSeF |
+| `ksefnik bank import` | Importuj wyciąg bankowy (CSV, MT940) |
+| `ksefnik reconcile` | Uzgodnij faktury KSeF z przelewami bankowymi |
+| `ksefnik validate` | Zwaliduj fakturę przed wysyłką |
+| `ksefnik mcp` | Uruchom serwer MCP dla asystentów AI |
+
+## Opcje globalne
+
+Każda komenda akceptuje następujące opcje:
+
+| Opcja | Zmienna środowiskowa | Opis |
+|-------|----------------------|------|
+| `--nip <nip>` | `KSEFNIK_NIP` | NIP podmiotu |
+| `--env <env>` | `KSEFNIK_ENV` | Środowisko: `production`, `demo`, `test` |
+| `--token <token>` | `KSEFNIK_TOKEN` | Token autoryzacyjny KSeF |
+| `--debug` | `KSEFNIK_DEBUG=1` | Tryb debugowania z logami |
+
+## Rozwiązywanie konfiguracji
+
+Wartości konfiguracyjne są rozwiązywane w następującej kolejności (pierwsza znaleziona wygrywa):
+
+1. Argumenty CLI (`--nip 1234567890`)
+2. Zmienne środowiskowe (`KSEFNIK_NIP=1234567890`)
+3. Plik `.ksefnikrc` w bieżącym katalogu lub katalogu nadrzędnym
+
+```bash
+# Przykład .ksefnikrc
+KSEFNIK_NIP=1234567890
+KSEFNIK_ENV=demo
+KSEFNIK_TOKEN=eyJhbGciOi...
+```
+
+<Aside type="caution">
+Nie commituj pliku `.ksefnikrc` z tokenem do repozytorium. Dodaj go do `.gitignore`.
+</Aside>
+
+## Format wyjścia
+
+Większość komend obsługuje opcję `--format` z dwiema wartościami:
+
+- `table` (domyślnie) -- czytelna tabela w terminalu
+- `json` -- dane w formacie JSON, przydatne do pipe'owania
+
+```bash
+# Tabela (domyślnie)
+ksefnik fetch --from 2026-03-01 --to 2026-03-31
+
+# JSON do dalszego przetwarzania
+ksefnik fetch --from 2026-03-01 --to 2026-03-31 --format json | jq '.invoices[0]'
+```

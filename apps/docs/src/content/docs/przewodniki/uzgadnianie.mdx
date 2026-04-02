@@ -1,0 +1,200 @@
+---
+title: Uzgadnianie faktur z przelewami
+description: Jak uzgadniać faktury KSeF z transakcjami bankowymi — pipeline, raport i analiza wyników.
+---
+
+import { Tabs, TabItem, Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components';
+
+Uzgadnianie (reconciliation) to proces automatycznego dopasowywania faktur z KSeF do przelewów z wyciągu bankowego. To kluczowa funkcja ksefnik — pozwala w kilka sekund sprawdzić, które faktury mają odpowiadający przelew, a które zostały nieopłacone.
+
+## Jak działa uzgadnianie
+
+Silnik reconciliation przepuszcza faktury i transakcje przez **6-etapowy pipeline**. Każdy etap (pass) stosuje inną strategię dopasowania — od najbardziej pewnej do najbardziej rozmytej.
+
+| Pass | Order | Strategia | Confidence | Opis |
+|------|-------|-----------|------------|------|
+| `ksefRef` | 100 | Referencja KSeF | 0.99 | Numer referencyjny KSeF w tytule przelewu |
+| `exactNip` | 200 | Dokładny NIP + kwota | 0.95 | NIP kontrahenta z przelewu + identyczna kwota |
+| `invoiceRef` | 300 | Numer faktury | 0.90 | Numer faktury (np. `FV/2026/03/15`) w tytule |
+| `fuzzy` | 400 | Rozmyte dopasowanie | 0.70–0.89 | Fuzzy matching tytułu przelewu z danymi faktury |
+| `partial` | 450 | Częściowa kwota | 0.60–0.79 | Przelew pokrywa część kwoty faktury |
+| `proximity` | 500 | Bliskość dat | 0.50–0.69 | Zbliżona kwota + data w oknie czasowym |
+
+<Aside type="tip">
+  Zacznij od symulatora, żeby zrozumieć jak działają poszczególne passy. Symulator generuje dane, w których każda strategia znajduje dopasowania — idealny sposób na naukę.
+</Aside>
+
+## Uruchamianie uzgadniania
+
+<Tabs>
+  <TabItem label="SDK">
+    ```typescript
+    import { createKsefnik } from '@ksefnik/core';
+
+    const ksef = createKsefnik({
+      config: { nip: '5213456784' },
+    });
+
+    // Pobierz faktury
+    const invoices = await ksef.invoices.fetch({
+      from: '2026-03-01',
+      to: '2026-03-31',
+    });
+
+    // Importuj wyciąg bankowy
+    const transactions = await ksef.bank.importStatement('./wyciag-marzec.csv');
+
+    // Uruchom uzgadnianie
+    const report = await ksef.reconciliation.run(invoices, transactions);
+
+    console.log(`Dopasowane: ${report.matched.length}`);
+    console.log(`Niesparowane faktury: ${report.unmatchedInvoices.length}`);
+    console.log(`Niesparowane przelewy: ${report.unmatchedTransactions.length}`);
+    ```
+  </TabItem>
+  <TabItem label="CLI">
+    ```bash
+    # Uzgadnianie z plikiem wyciągu
+    ksefnik reconcile --from 2026-03-01 --to 2026-03-31 --bank ./wyciag.csv
+
+    # Z wyciągiem MT940
+    ksefnik reconcile --from 2026-03-01 --to 2026-03-31 --bank ./wyciag.mt940
+
+    # Zapisz raport do pliku
+    ksefnik reconcile --from 2026-03-01 --to 2026-03-31 --bank ./wyciag.csv \
+      --format json > raport-marzec.json
+    ```
+  </TabItem>
+  <TabItem label="MCP">
+    Wywołanie narzędzia `reconcile` przez AI:
+
+    ```json
+    {
+      "tool": "reconcile",
+      "arguments": {
+        "from": "2026-03-01",
+        "to": "2026-03-31",
+        "bankStatementPath": "./wyciag-marzec.csv"
+      }
+    }
+    ```
+
+    AI otrzymuje pełny raport i może odpowiedzieć na pytania w stylu: _"Które faktury nie mają przelewu?"_ lub _"Jaka jest łączna kwota niesparowanych faktur?"_.
+  </TabItem>
+</Tabs>
+
+## Struktura raportu ReconciliationReport
+
+```typescript
+interface ReconciliationReport {
+  matched: Match[];
+  unmatchedInvoices: Invoice[];
+  unmatchedTransactions: BankTransaction[];
+  summary: {
+    totalInvoices: number;
+    totalTransactions: number;
+    matchedCount: number;
+    unmatchedInvoiceCount: number;
+    unmatchedTransactionCount: number;
+    matchRate: number; // 0.0–1.0
+    averageConfidence: number; // 0.0–1.0
+    totalInvoiceAmount: number; // w groszach
+    totalMatchedAmount: number; // w groszach
+  };
+  passBreakdown: PassBreakdown[];
+}
+
+interface Match {
+  invoice: Invoice;
+  transaction: BankTransaction;
+  pass: string; // nazwa passa, np. 'exactNip'
+  confidence: number; // 0.0–1.0
+}
+
+interface PassBreakdown {
+  pass: string;
+  matchCount: number;
+  averageConfidence: number;
+}
+```
+
+## Analiza wyników
+
+### Podsumowanie
+
+```typescript
+const { summary } = report;
+
+console.log(`Match rate: ${(summary.matchRate * 100).toFixed(1)}%`);
+console.log(`Średnia pewność: ${(summary.averageConfidence * 100).toFixed(1)}%`);
+console.log(`Łączna kwota faktur: ${(summary.totalInvoiceAmount / 100).toFixed(2)} PLN`);
+console.log(`Kwota dopasowana: ${(summary.totalMatchedAmount / 100).toFixed(2)} PLN`);
+```
+
+### Rozbicie po passach
+
+```typescript
+for (const pb of report.passBreakdown) {
+  console.log(
+    `${pb.pass}: ${pb.matchCount} dopasowań (śr. pewność: ${(pb.averageConfidence * 100).toFixed(0)}%)`
+  );
+}
+// Przykładowy wynik:
+// ksefRef: 12 dopasowań (śr. pewność: 99%)
+// exactNip: 18 dopasowań (śr. pewność: 95%)
+// invoiceRef: 8 dopasowań (śr. pewność: 90%)
+// fuzzy: 5 dopasowań (śr. pewność: 78%)
+// partial: 2 dopasowania (śr. pewność: 65%)
+// proximity: 1 dopasowań (śr. pewność: 55%)
+```
+
+### Niesparowane faktury
+
+```typescript
+if (report.unmatchedInvoices.length > 0) {
+  console.log('\nNiesparowane faktury (brak przelewu):');
+  for (const inv of report.unmatchedInvoices) {
+    const kwota = (inv.grossAmount / 100).toFixed(2);
+    console.log(`  ${inv.number} | ${inv.buyerNip} | ${kwota} PLN`);
+  }
+}
+```
+
+<Aside type="caution">
+  Niesparowana faktura nie zawsze oznacza brak zapłaty. Przelew mógł wpłynąć w innym miesiącu, być podzielony na raty, lub mieć tytuł uniemożliwiający automatyczne dopasowanie.
+</Aside>
+
+### Dopasowania o niskiej pewności
+
+```typescript
+const lowConfidence = report.matched.filter(m => m.confidence < 0.7);
+
+if (lowConfidence.length > 0) {
+  console.log('\nDopasowania wymagające ręcznej weryfikacji:');
+  for (const m of lowConfidence) {
+    console.log(
+      `  ${m.invoice.number} ↔ ${m.transaction.title.slice(0, 40)}... ` +
+      `(pewność: ${(m.confidence * 100).toFixed(0)}%, pass: ${m.pass})`
+    );
+  }
+}
+```
+
+## Przykład: firma z 50 fakturami i 80 przelewami
+
+<Steps>
+  1. Firma X pobiera 50 faktur za marzec z KSeF i importuje wyciąg z 80 transakcjami.
+  2. Uruchamia `ksef.reconciliation.run(invoices, transactions)`.
+  3. Pipeline przetwarza dane przez 6 passów:
+     - `ksefRef` dopasowuje 10 faktur (przelewy MPP z referencją KSeF)
+     - `exactNip` dopasowuje 20 faktur (NIP + kwota)
+     - `invoiceRef` dopasowuje 8 faktur (numer faktury w tytule)
+     - `fuzzy` dopasowuje 5 faktur (rozmyte dopasowanie)
+     - `partial` i `proximity` dopasowują po 1 fakturze
+  4. Wynik: **45 z 50 faktur** dopasowanych (match rate 90%), 5 niesparowanych do ręcznej weryfikacji.
+  5. Pozostałe 35 transakcji bankowych (80 - 45 = 35) to przelewy niezwiązane z fakturami z danego okresu (np. wynagrodzenia, ZUS, podatki).
+</Steps>
+
+<Aside type="note">
+  Pluginy (np. `@ksefnik/pro-reconciliation`) mogą dodawać kolejne passy z orderem 600+, zwiększając match rate dla specyficznych branż.
+</Aside>

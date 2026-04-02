@@ -1,0 +1,89 @@
+---
+title: "Narzędzie: confirm-match"
+description: Potwierdzenie lub odrzucenie dopasowania faktury do transakcji.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Narzędzie `confirm-match` pozwala potwierdzić lub odrzucić dopasowanie wygenerowane przez silnik uzgadniania. Przydatne, gdy AI sugeruje ręczne dopasowanie, a użytkownik musi je zatwierdzić.
+
+## Parametry wejściowe
+
+| Parametr | Typ | Wymagany | Opis |
+|----------|-----|----------|------|
+| `matchId` | `string` | Tak | Identyfikator dopasowania z raportu |
+| `confirmed` | `boolean` | Tak | `true` -- potwierdź, `false` -- odrzuć |
+
+## Format odpowiedzi
+
+```ts
+{
+  matchId: string
+  confirmed: boolean
+  success: boolean
+}
+```
+
+## Przykład wywołania -- potwierdzenie
+
+```json
+{
+  "name": "confirm-match",
+  "arguments": {
+    "matchId": "m-001",
+    "confirmed": true
+  }
+}
+```
+
+## Przykład odpowiedzi
+
+```json
+{
+  "matchId": "m-001",
+  "confirmed": true,
+  "success": true
+}
+```
+
+## Przykład wywołania -- odrzucenie
+
+```json
+{
+  "name": "confirm-match",
+  "arguments": {
+    "matchId": "m-003",
+    "confirmed": false
+  }
+}
+```
+
+## Przykład odpowiedzi
+
+```json
+{
+  "matchId": "m-003",
+  "confirmed": false,
+  "success": true
+}
+```
+
+## Kiedy używać
+
+- Gdy AI zaproponował ręczne dopasowanie i użytkownik je zatwierdza
+- Odrzucenie błędnego automatycznego dopasowania (niska pewność)
+- W procesie interaktywnej weryfikacji raportu uzgodnienia
+
+<Aside type="tip">
+Dopasowania o pewności poniżej 0.8 warto zweryfikować z użytkownikiem przed potwierdzeniem. AI powinien wyjaśnić, dlaczego sugeruje dane dopasowanie.
+</Aside>
+
+<Aside>
+Odrzucone dopasowanie powoduje, że faktura i transakcja wracają do puli nieuzgodnionych. Można je pobrać ponownie przez `get-unmatched`.
+</Aside>
+
+## Powiązane narzędzia
+
+- `reconcile` -- wygeneruj raport z dopasowaniami
+- `get-unmatched` -- pobierz pozycje do ręcznego dopasowania
+- `query-invoices` -- sprawdź szczegóły faktury przed potwierdzeniem

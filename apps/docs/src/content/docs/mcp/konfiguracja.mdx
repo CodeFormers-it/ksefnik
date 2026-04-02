@@ -1,0 +1,114 @@
+---
+title: Konfiguracja serwera MCP
+description: Jak skonfigurować i uruchomić serwer MCP dla ksefnik.
+---
+
+import { Tabs, TabItem, Aside, Steps } from '@astrojs/starlight/components'
+
+## Czym jest MCP
+
+Model Context Protocol (MCP) to otwarty standard komunikacji między asystentami AI a zewnętrznymi narzędziami. Ksefnik udostępnia serwer MCP, który pozwala AI operować na fakturach KSeF i wyciągach bankowych.
+
+```
+┌──────────────────┐     stdio      ┌──────────────────┐     SDK      ┌──────────────┐
+│  Asystent AI     │ ◄────────────► │  Serwer MCP      │ ◄──────────► │  @ksefnik/   │
+│  (Claude, etc.)  │   JSON-RPC     │  (@ksefnik/mcp)  │              │  core         │
+└──────────────────┘                └──────────────────┘              └──────────────┘
+```
+
+Serwer MCP to cienka warstwa, która tłumaczy wywołania narzędzi MCP na metody SDK `@ksefnik/core`.
+
+## Konfiguracja
+
+<Tabs>
+  <TabItem label="Claude Desktop">
+    Edytuj plik `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) lub `%APPDATA%/Claude/claude_desktop_config.json` (Windows):
+
+    ```json
+    {
+      "mcpServers": {
+        "ksefnik": {
+          "command": "ksefnik",
+          "args": ["mcp", "--stdio"],
+          "env": {
+            "KSEFNIK_NIP": "1234567890",
+            "KSEFNIK_TOKEN": "eyJhbGciOi...",
+            "KSEFNIK_ENV": "demo"
+          }
+        }
+      }
+    }
+    ```
+  </TabItem>
+  <TabItem label="Cursor">
+    Utwórz plik `.cursor/mcp.json` w katalogu projektu:
+
+    ```json
+    {
+      "mcpServers": {
+        "ksefnik": {
+          "command": "ksefnik",
+          "args": ["mcp", "--stdio"],
+          "env": {
+            "KSEFNIK_NIP": "1234567890",
+            "KSEFNIK_TOKEN": "eyJhbGciOi..."
+          }
+        }
+      }
+    }
+    ```
+  </TabItem>
+  <TabItem label="Claude Code">
+    Dodaj do `.claude/settings.json`:
+
+    ```json
+    {
+      "mcpServers": {
+        "ksefnik": {
+          "command": "ksefnik",
+          "args": ["mcp", "--stdio"],
+          "env": {
+            "KSEFNIK_NIP": "1234567890",
+            "KSEFNIK_TOKEN": "eyJhbGciOi..."
+          }
+        }
+      }
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+## Testowanie
+
+<Steps>
+1. Zainstaluj ksefnik globalnie lub użyj `pnpm dlx`
+2. Uruchom serwer ręcznie, aby sprawdzić czy działa
+3. Sprawdź logi w kliencie AI
+</Steps>
+
+```bash
+# Test ręczny -- serwer powinien uruchomić się bez błędów
+ksefnik mcp --stdio
+
+# Z pnpm dlx (bez globalnej instalacji)
+pnpm dlx @ksefnik/cli mcp --stdio
+```
+
+<Aside type="caution">
+Serwer MCP wymaga poprawnie skonfigurowanego NIP i tokena. Bez nich narzędzia wymagające połączenia z KSeF zwrócą błąd.
+</Aside>
+
+## Dostępne narzędzia
+
+| Narzędzie | Opis |
+|-----------|------|
+| `sync-invoices` | Synchronizacja faktur z KSeF |
+| `import-bank` | Import wyciągu bankowego |
+| `reconcile` | Uzgadnianie faktur z przelewami |
+| `get-unmatched` | Nieuzgodnione pozycje z raportu |
+| `query-invoices` | Wyszukiwanie faktur |
+| `send-invoice` | Wysyłka faktury do KSeF |
+| `validate-invoice` | Walidacja faktury |
+| `confirm-match` | Potwierdzenie dopasowania |
+
+Każde narzędzie opisane jest szczegółowo na osobnej stronie.

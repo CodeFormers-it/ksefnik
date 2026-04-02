@@ -1,0 +1,103 @@
+---
+title: MT940
+description: Parser formatu MT940 (SWIFT) w ksefnik.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+MT940 to międzynarodowy standard SWIFT do przesyłania wyciągów bankowych. Jest obsługiwany przez większość banków w Polsce i na świecie. Ksefnik parsuje go przy pomocy biblioteki `mt940js`.
+
+## Struktura pól MT940
+
+| Pole | Nazwa | Opis |
+|------|-------|------|
+| `:20:` | Reference | Numer referencyjny wyciągu |
+| `:25:` | Account | Numer rachunku bankowego |
+| `:60F:` | Opening balance | Saldo otwarcia |
+| `:61:` | Transaction | Linia transakcji (data, kwota, typ) |
+| `:86:` | Details | Szczegóły transakcji (opis, kontrahent) |
+| `:62F:` | Closing balance | Saldo zamknięcia |
+
+## Detekcja formatu
+
+Parser rozpoznaje plik MT940 po obecności pól SWIFT:
+
+```typescript
+// Warunek detekcji w canParse()
+content.includes(':20:') && (content.includes(':60F:') || content.includes(':61:'))
+// lub nagłówek SWIFT
+content.startsWith('{1:')
+```
+
+## Mapowanie na BankTransaction
+
+| Pole MT940 | Pole BankTransaction | Transformacja |
+|------------|---------------------|---------------|
+| `:61:` data | `date` | `Date` -> `YYYY-MM-DD` (ISO) |
+| `:61:` kwota | `amount` | `amount * 100` = grosze |
+| `:61:` D/C | kierunek | D = debit (ujemna kwota), C = credit (dodatnia) |
+| `:86:` | `description` | Pełna treść pola details |
+
+<Aside type="caution">
+  Transakcje z kwotą ujemną (debit) oznaczają przelew wychodzący -- NIP trafia do `recipientNIP`. Transakcje z kwotą dodatnią (credit) to przelew przychodzący -- NIP trafia do `senderNIP`.
+</Aside>
+
+## Ekstrakcja NIP z pola :86:
+
+NIP jest wyciągany z pola `:86:` za pomocą `extractFirstNIP()`. W MT940 NIP często pojawia się w subpolu `~38`:
+
+```
+:86:~20Faktura FV/2026/03/001~27ACME SP Z O O~38NIP5213456789~30BREX
+```
+
+## Ekstrakcja nazwy kontrahenta
+
+Nazwa kontrahenta jest szukana kolejno w subpolach:
+
+```typescript
+// Priorytet 1: subpole ~27 (nazwa beneficjenta)
+const match = details.match(/~27([^~]+)/)
+// Priorytet 2: subpole ~32
+const match32 = details.match(/~32([^~]+)/)
+```
+
+## Przeliczanie kwot
+
+Kwoty w MT940 to liczby zmiennoprzecinkowe. Parser przelicza je na grosze:
+
+```typescript
+function amountToGrosze(amount: number): number {
+  return Math.round(amount * 100) // 1230.50 -> 123050
+}
+```
+
+## Przykład pliku MT940
+
+```swift
+{1:F01BREXPLPWXXX0000000000}{2:O9400000000000N}
+{4:
+:20:STMT2026030100001
+:25:PL27114020040000300201355387
+:28C:00001/001
+:60F:C260301PLN50000,00
+:61:2603010301D1230,00NTRFREF123456//BANKREF001
+:86:~20Zaplata za fakture FV/2026/03/001~27ACME SP Z O O~38NIP5213456789
+:61:2603050301C5000,00NTRFREF789//BANKREF002
+:86:~20Przelew przychodzacy~27BETA SP Z O O~38NIP7811234567
+:62F:C260305PLN53770,00
+-}
+```
+
+## Użycie
+
+```typescript
+import { importBankStatement } from '@ksefnik/core'
+
+const transactions = await importBankStatement('./wyciag.mt940')
+
+for (const tx of transactions) {
+  console.log(`${tx.date} | ${tx.amount} gr | ${tx.recipientNIP ?? tx.senderNIP}`)
+  // 2026-03-01 | -123000 | 5213456789
+  // 2026-03-05 | 500000  | 7811234567
+}
+```

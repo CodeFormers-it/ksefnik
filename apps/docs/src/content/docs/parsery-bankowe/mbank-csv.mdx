@@ -1,0 +1,101 @@
+---
+title: mBank CSV
+description: Parser formatu CSV z mBanku w ksefnik.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Parser `MbankParser` obsługuje format CSV eksportowany z systemu transakcyjnego mBanku. Nagłówki kolumn zaczynają się od znaku `#`.
+
+## Specyfikacja formatu
+
+| Cecha | Wartość |
+|-------|--------|
+| Separator | `;` (średnik) |
+| Kodowanie | UTF-8 (z opcjonalnym BOM) |
+| Format daty | `YYYY-MM-DD` |
+| Format kwoty | `-1230,00` (polski, z przecinkiem) |
+| Nagłówki | Prefiks `#` |
+
+## Kolumny
+
+| # | Nagłówek | Mapowanie |
+|---|----------|-----------|
+| 1 | `#Data operacji` | `date` |
+| 2 | `#Data księgowania` | (pomijane) |
+| 3 | `#Opis operacji` | typ operacji |
+| 4 | `#Tytuł` | `description` |
+| 5 | `#Nadawca/Odbiorca` | `recipientName` / `senderName` |
+| 6 | `#Numer konta` | numer rachunku kontrahenta |
+| 7 | `#Kwota` | `amount` (w groszach) |
+| 8 | `#Saldo po operacji` | (pomijane) |
+
+## Detekcja
+
+```typescript
+// mBank: nagłówki z prefixem #
+content.includes('#Data operacji') && content.includes('#Opis operacji')
+```
+
+## Parsowanie kwot
+
+Kwoty w formacie mBanku używają polskiej notacji z przecinkiem:
+
+```typescript
+// Wejście: "-1230,00"
+// 1. Zamiana przecinka na kropkę: "-1230.00"
+// 2. parseFloat: -1230.0
+// 3. * 100 = -123000 groszy
+```
+
+<Aside type="tip">
+  Kwota ujemna oznacza przelew wychodzący (obciążenie). Kwota dodatnia to przelew przychodzący (uznanie).
+</Aside>
+
+## Ekstrakcja NIP
+
+NIP jest szukany w polach `#Nadawca/Odbiorca` i `#Tytuł` łącznie:
+
+```typescript
+const nip = extractFirstNIP(`${counterparty ?? ''} ${description}`)
+```
+
+## Przykład CSV
+
+```csv
+#Data operacji;#Data księgowania;#Opis operacji;#Tytuł;#Nadawca/Odbiorca;#Numer konta;#Kwota;#Saldo po operacji
+2026-03-01;2026-03-01;PRZELEW WYCHODZĄCY;Faktura FV/2026/03/001;ACME SP Z O O NIP5213456789;27114020040000300201355387;-1230,00;48770,00
+2026-03-05;2026-03-05;PRZELEW PRZYCHODZĄCY;Zaplata za usluge;BETA SP Z O O;98105012141000002345678901;5000,00;53770,00
+```
+
+## Sparsowany wynik
+
+```typescript
+[
+  {
+    date: '2026-03-01',
+    amount: -123000,           // -1230,00 PLN w groszach
+    description: 'Faktura FV/2026/03/001',
+    recipientName: 'ACME SP Z O O NIP5213456789',
+    recipientNIP: '5213456789',
+    bank: 'mbank',
+  },
+  {
+    date: '2026-03-05',
+    amount: 500000,            // 5000,00 PLN w groszach
+    description: 'Zaplata za usluge',
+    senderName: 'BETA SP Z O O',
+    senderNIP: undefined,
+    bank: 'mbank',
+  },
+]
+```
+
+## Użycie
+
+```typescript
+import { importBankStatement } from '@ksefnik/core'
+
+const transactions = await importBankStatement('./mbank-wyciag.csv')
+console.log(transactions.length) // np. 42
+```

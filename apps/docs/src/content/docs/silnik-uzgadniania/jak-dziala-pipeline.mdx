@@ -1,0 +1,157 @@
+---
+title: Jak dziala pipeline
+description: Opis dzialania pipeline uzgadniania faktur z przelewami w ksefnik.
+---
+
+import { Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components'
+import ReconciliationPipelineViz from '../../../components/ReconciliationPipelineViz'
+
+Pipeline uzgadniania to serce ksefnik. Przyjmuje listę faktur i transakcji bankowych, a następnie przepuszcza je przez serię passów -- od najwyższej do najniższej pewności dopasowania.
+
+## Zasada działania
+
+```
+┌──────────┐   ┌──────────────┐
+│ Faktury  │──→│              │
+└──────────┘   │  Pass 100    │──→ matched
+┌──────────┐   │  (ksef-ref)  │
+│Transakcje│──→│              │
+└──────────┘   └──────┬───────┘
+                      │ niesparowane
+               ┌──────▼───────┐
+               │  Pass 200    │──→ matched
+               │  (exact)     │
+               └──────┬───────┘
+                      │ niesparowane
+               ┌──────▼───────┐
+               │  Pass 300    │──→ matched
+               │ (invoice-ref)│
+               └──────┬───────┘
+                      │ niesparowane
+               ┌──────▼───────┐
+               │  Pass 400    │──→ matched
+               │  (fuzzy)     │
+               └──────┬───────┘
+                      │ niesparowane
+               ┌──────▼───────┐
+               │  Pass 450    │──→ matched
+               │  (partial)   │
+               └──────┬───────┘
+                      │ niesparowane
+               ┌──────▼───────┐
+               │  Pass 500    │──→ matched
+               │ (proximity)  │
+               └──────┬───────┘
+                      │
+               ┌──────▼───────┐
+               │    Raport    │
+               └──────────────┘
+```
+
+## Kluczowe zasady
+
+<CardGrid>
+  <Card title="Sekwencyjność">
+    Passy wykonywane są od najniższego `order` do najwyższego. Im niższy numer, tym wyższa pewność dopasowania.
+  </Card>
+  <Card title="Tylko niesparowane">
+    Każdy pass widzi wyłącznie faktury i transakcje, które nie zostały dopasowane przez wcześniejsze passy.
+  </Card>
+  <Card title="Brak re-matchowania">
+    Raz dopasowana faktura lub transakcja jest wykluczona z dalszego przetwarzania. Pipeline nie cofnie się, żeby zmienić zdanie.
+  </Card>
+  <Card title="Early exit">
+    Jeśli w dowolnym momencie nie ma już niesparowanych faktur lub transakcji, pipeline kończy pracę.
+  </Card>
+</CardGrid>
+
+## API: `runPipeline()`
+
+```ts
+import { runPipeline } from '@ksefnik/core'
+
+const report = await runPipeline(invoices, transactions, passes)
+```
+
+Funkcja sortuje passy po polu `order`, a następnie iteruje po nich, budując listę dopasowań:
+
+```ts
+const sortedPasses = [...passes].sort((a, b) => a.order - b.order)
+
+for (const pass of sortedPasses) {
+  const unmatchedInvoices = getUnmatchedInvoices(invoices, allMatches)
+  const unmatchedTransactions = getUnmatchedTransactions(transactions, allMatches)
+
+  if (unmatchedInvoices.length === 0 || unmatchedTransactions.length === 0) break
+
+  const context: MatchingContext = {
+    invoices: unmatchedInvoices,
+    transactions: unmatchedTransactions,
+    alreadyMatched: allMatches,
+  }
+
+  const results = await pass.run(context)
+  // ... deduplikacja i dodanie do allMatches
+}
+```
+
+## Struktura raportu: `ReconciliationReport`
+
+```ts
+interface ReconciliationReport {
+  id: string                          // UUID raportu
+  matched: Match[]                    // dopasowane pary
+  unmatchedInvoices: Invoice[]        // faktury bez dopasowania
+  unmatchedTransactions: BankTransaction[]  // transakcje bez dopasowania
+  summary: {
+    totalInvoices: number             // łączna liczba faktur
+    totalTransactions: number         // łączna liczba transakcji
+    matchedCount: number              // liczba dopasowań
+    unmatchedInvoiceCount: number
+    unmatchedTransactionCount: number
+    averageConfidence: number         // średnia pewność (0-100)
+    passBreakdown: Record<string, number>  // ile dopasowań z każdego passa
+  }
+  runAt: string                       // ISO timestamp
+  durationMs: number                  // czas wykonania w ms
+}
+```
+
+## Scoring helpers
+
+Pipeline korzysta z zestawu funkcji pomocniczych do obliczania pewności:
+
+| Funkcja | Opis |
+|---------|------|
+| `clampConfidence(score)` | Ogranicza wynik do zakresu 0-100 i zaokrągla |
+| `dateProximityBonus(invoiceDate, txDate, maxDays?)` | +10 za &le;3 dni, +5 za &le;7 dni, -10 za >30 dni |
+| `amountMatchBonus(invoiceAmount, txAmount)` | +5 za dokładne dopasowanie kwoty |
+| `agePenalty(txDate, now?)` | -10 za transakcje starsze niż 60 dni |
+
+```ts
+import { clampConfidence, dateProximityBonus } from '@ksefnik/core'
+
+const bonus = dateProximityBonus('2026-03-15', '2026-03-18') // 10
+const score = clampConfidence(50 + 20 * 0.9)                // 68
+```
+
+<Aside type="tip">
+  Scoring helpers są publiczne -- możesz ich używać w swoich [własnych passach](/silnik-uzgadniania/wlasne-passy/).
+</Aside>
+
+## Kolejność passów
+
+| Order | Pass | Confidence | Strategia |
+|-------|------|-----------|-----------|
+| 100 | ksef-ref | 99% | Numer KSeF w tytule przelewu |
+| 200 | exact | 95% | Dokładna kwota + NIP |
+| 300 | invoice-ref | 75-90% | Numer faktury w tytule przelewu |
+| 400 | fuzzy | 80% | Rozmyte dopasowanie nazwy + kwota |
+| 450 | partial | 50-70% | Suma kilku przelewów od tego samego NIP |
+| 500 | proximity | 50-70% | Kwota ±5% i data ±30 dni |
+
+## Interaktywna wizualizacja
+
+Kliknij na pass, żeby zobaczyć które faktury zostały dopasowane na danym etapie:
+
+<ReconciliationPipelineViz client:visible />

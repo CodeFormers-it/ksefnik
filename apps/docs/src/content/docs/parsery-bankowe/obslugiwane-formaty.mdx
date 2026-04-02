@@ -1,0 +1,97 @@
+---
+title: Obsługiwane formaty
+description: Lista obsługiwanych formatów wyciągów bankowych w ksefnik.
+---
+
+import { Tabs, TabItem, Aside, Card, CardGrid } from '@astrojs/starlight/components'
+
+Ksefnik obsługuje 5 formatów wyciągów bankowych z polskich banków. Każdy parser implementuje interfejs `BankStatementParser` i jest automatycznie wykrywany na podstawie treści pliku.
+
+## Tabela porównawcza
+
+| Bank | Format | Separator | Kodowanie | Format daty |
+|------|--------|-----------|-----------|-------------|
+| MT940 | SWIFT MT940 | pola `:XX:` | ASCII | YYMMDD |
+| mBank | CSV | `;` | UTF-8 | YYYY-MM-DD |
+| ING | CSV | `;` | UTF-8 | YYYYMMDD |
+| PKO BP | CSV | `,` | UTF-8 | YYYY-MM-DD |
+| Santander | CSV | `;` | UTF-8 | DD-MM-YYYY |
+
+## Interfejs BankStatementParser
+
+Wszystkie parsery implementują wspólny interfejs:
+
+```typescript
+interface BankStatementParser {
+  bank: string
+  canParse(content: string | Buffer): Promise<boolean>
+  parse(content: string | Buffer): Promise<BankTransaction[]>
+}
+```
+
+- **`bank`** -- identyfikator parsera (np. `'mbank'`, `'ing'`)
+- **`canParse()`** -- sprawdza czy treść pasuje do tego formatu
+- **`parse()`** -- parsuje treść i zwraca tablicę `BankTransaction`
+
+## Auto-detekcja
+
+Nie musisz podawać formatu ręcznie. Funkcja `importBankStatement()` automatycznie wykrywa format na podstawie nagłówków i struktury pliku:
+
+```typescript
+import { importBankStatement } from '@ksefnik/core'
+
+// Format zostanie wykryty automatycznie
+const transactions = await importBankStatement('./wyciag.csv')
+```
+
+<Aside type="tip">
+  Szczegóły mechanizmu auto-detekcji znajdziesz na stronie [Auto-detekcja formatu](/parsery-bankowe/auto-detekcja/).
+</Aside>
+
+## Jak dodać nowy parser
+
+Aby obsłużyć nowy format bankowy, zaimplementuj interfejs `BankStatementParser`:
+
+```typescript
+import type { BankStatementParser, BankTransaction } from '@ksefnik/shared'
+
+export class MojBankParser implements BankStatementParser {
+  bank = 'moj-bank'
+
+  async canParse(content: string | Buffer): Promise<boolean> {
+    const text = typeof content === 'string' ? content : content.toString('utf-8')
+    return text.includes('MOJ-BANK-HEADER')
+  }
+
+  async parse(content: string | Buffer): Promise<BankTransaction[]> {
+    const text = typeof content === 'string' ? content : content.toString('utf-8')
+    // Logika parsowania...
+    return []
+  }
+}
+```
+
+Następnie przekaż parser do `importBankStatementFromString()`:
+
+```typescript
+import { importBankStatementFromString, getDefaultParsers } from '@ksefnik/core'
+import { MojBankParser } from './moj-bank.parser.js'
+
+const parsers = [...getDefaultParsers(), new MojBankParser()]
+const transactions = await importBankStatementFromString(content, { parsers })
+```
+
+<CardGrid>
+  <Card title="MT940" icon="document">
+    Uniwersalny format SWIFT. [Dokumentacja](/parsery-bankowe/mt940/)
+  </Card>
+  <Card title="mBank" icon="document">
+    CSV z separatorem `;`. [Dokumentacja](/parsery-bankowe/mbank-csv/)
+  </Card>
+  <Card title="ING" icon="document">
+    CSV z quoted headers. [Dokumentacja](/parsery-bankowe/ing-csv/)
+  </Card>
+  <Card title="PKO BP" icon="document">
+    CSV z separatorem `,`. [Dokumentacja](/parsery-bankowe/pko-bp-csv/)
+  </Card>
+</CardGrid>

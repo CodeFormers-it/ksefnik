@@ -1,0 +1,173 @@
+---
+title: Wzorzec adapter
+description: Jak ksefnik używa wzorca adapter do abstrakcji komunikacji z API KSeF.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components'
+
+Ksefnik komunikuje się z KSeF API wyłącznie przez interfejs `KsefAdapter`. Dzięki temu implementacja klienta jest wymienialna — od symulatora offline po własny wrapper na istniejący kod.
+
+## Problem
+
+Różne sytuacje wymagają różnych implementacji klienta KSeF:
+
+- **Produkcja** — prawdziwe API z autentykacją, retry i cache
+- **Testy** — symulator offline bez sieci
+- **Vitest** — mock z predefiniowanymi odpowiedziami
+- **Migracja** — wrapper na istniejący klient (np. ksefapi.pl)
+
+Twardy coupling do jednego klienta HTTP uniemożliwiłby te scenariusze.
+
+## Rozwiązanie: KsefAdapter
+
+```typescript
+interface KsefAdapter {
+  fetchInvoices(opts: FetchInvoicesOpts): Promise<Invoice[]>
+  sendInvoice(input: SendInvoiceInput): Promise<SendInvoiceResult>
+  getUpo(ksefReference: string): Promise<UpoResult>
+}
+```
+
+Trzy metody — to cały kontrakt. Każda implementacja musi je spełnić. Nic więcej.
+
+## Warstwy wewnętrzne
+
+Wewnątrz `@ksefnik/core` adapter produkcyjny składa się z warstw:
+
+```
+KsefAdapter (interfejs publiczny)
+    ↓
+RetryLayer         → automatyczny retry z exponential backoff
+    ↓
+CacheLayer         → cache odpowiedzi (TTL)
+    ↓
+SessionManager     → zarządzanie sesją KSeF (init/terminate)
+    ↓
+KsefClient         → HTTP client (wewnętrzny, niepubliczny)
+```
+
+Użytkownik widzi tylko `KsefAdapter`. Warstwy wewnętrzne to detal implementacyjny.
+
+## Dependency injection
+
+Adapter wstrzykiwany jest przez `createKsefnik()`:
+
+```typescript
+const ksefnik = createKsefnik({
+  config: { nip: '1234567890', environment: 'production' },
+  adapter: myAdapter,  // ← dependency injection
+})
+```
+
+Brak adaptera = brak komunikacji z KSeF. Metody `fetch()`, `send()` i `getUpo()` rzucą `Error`.
+
+## Implementacje
+
+<Tabs>
+  <TabItem label="Symulator">
+    ```typescript
+    import { createSimulatorAdapter } from '@ksefnik/simulator'
+
+    const ksefnik = createKsefnik({
+      config: { nip: '1234567890', environment: 'test' },
+      adapter: createSimulatorAdapter({ scenario: 'happy-path' }),
+    })
+
+    // Działa offline — odpowiedzi z predefiniowanych scenariuszy
+    const invoices = await ksefnik.invoices.fetch({
+      from: '2025-01-01',
+      to: '2025-12-31',
+    })
+    ```
+  </TabItem>
+  <TabItem label="Mock w Vitest">
+    ```typescript
+    import { describe, it, expect, vi } from 'vitest'
+
+    const mockAdapter: KsefAdapter = {
+      fetchInvoices: vi.fn().mockResolvedValue([
+        {
+          id: '550e8400-e29b-41d4-a716-446655440000',
+          invoiceNumber: 'FV/2025/001',
+          sellerNIP: '1234567890',
+          grossAmount: 123000,
+          currency: 'PLN',
+          issueDate: '2025-01-15',
+          createdAt: new Date().toISOString(),
+        },
+      ]),
+      sendInvoice: vi.fn().mockResolvedValue({
+        ksefReference: 'REF-123',
+        timestamp: new Date().toISOString(),
+      }),
+      getUpo: vi.fn().mockResolvedValue({
+        ksefReference: 'REF-123',
+        upoXml: '<UPO/>',
+        status: 'confirmed',
+      }),
+    }
+
+    const ksefnik = createKsefnik({
+      config: { nip: '1234567890', environment: 'test' },
+      adapter: mockAdapter,
+    })
+    ```
+  </TabItem>
+  <TabItem label="Własny wrapper">
+    ```typescript
+    import type { KsefAdapter } from '@ksefnik/shared'
+
+    // Wrapper na istniejący klient
+    class MyExistingClientAdapter implements KsefAdapter {
+      constructor(private client: MyExistingKsefClient) {}
+
+      async fetchInvoices(opts) {
+        const raw = await this.client.getInvoices(opts.from, opts.to)
+        return raw.map(mapToKsefnikInvoice)
+      }
+
+      async sendInvoice(input) {
+        const ref = await this.client.submit(input.xml)
+        return { ksefReference: ref, timestamp: new Date().toISOString() }
+      }
+
+      async getUpo(ref) {
+        const upo = await this.client.fetchUpo(ref)
+        return { ksefReference: ref, upoXml: upo, status: 'confirmed' }
+      }
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+## Wymienialność
+
+Kluczowa zaleta: ten sam kod biznesowy działa z dowolnym adapterem:
+
+```typescript
+// Ten sam kod — różne adaptery
+async function reconcileLastMonth(adapter: KsefAdapter) {
+  const ksefnik = createKsefnik({
+    config: { nip: '1234567890', environment: 'production' },
+    adapter,
+  })
+
+  const invoices = await ksefnik.invoices.fetch({
+    from: '2025-03-01',
+    to: '2025-03-31',
+  })
+
+  const txs = await ksefnik.bank.list()
+  return ksefnik.reconciliation.run(invoices, txs)
+}
+
+// Produkcja
+await reconcileLastMonth(productionAdapter)
+
+// Test
+await reconcileLastMonth(createSimulatorAdapter({ scenario: 'happy-path' }))
+```
+
+<Aside>
+  Wzorzec adapter jest fundamentem testowalności ksefnik. Bez niego testy wymagałyby sieci i tokena KSeF.
+</Aside>

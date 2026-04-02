@@ -1,0 +1,203 @@
+---
+title: Typy błędów
+description: Hierarchia klas błędów w ksefnik z kodami i kontekstem.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Ksefnik definiuje hierarchię błędów opartą na klasie bazowej `KsefnikError`. Każdy błąd ma unikalny `code`, czytelny `message` i opcjonalny `context` z dodatkowymi danymi.
+
+## Hierarchia
+
+```
+KsefnikError (bazowa)
+├── KsefApiError
+├── KsefSessionError
+├── KsefTimeoutError
+├── InvoiceValidationError
+├── BankParseError
+├── UnsupportedBankFormatError
+└── ReconciliationError
+```
+
+## KsefnikError (klasa bazowa)
+
+Wszystkie błędy ksefnik dziedziczą po tej klasie.
+
+```typescript
+class KsefnikError extends Error {
+  readonly code: string
+  readonly context?: Record<string, unknown>
+
+  constructor(code: string, message: string, context?: Record<string, unknown>)
+}
+```
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `code` | `string` | Stały kod błędu (np. `'KSEF_API_ERROR'`) |
+| `message` | `string` | Czytelny opis błędu |
+| `context` | `Record<string, unknown>?` | Dodatkowe dane diagnostyczne |
+
+## KsefApiError
+
+Błąd komunikacji z API KSeF (HTTP error, invalid response).
+
+```typescript
+class KsefApiError extends KsefnikError {
+  readonly statusCode?: number
+  constructor(message: string, statusCode?: number, context?: Record<string, unknown>)
+}
+```
+
+| Pole | Wartość |
+|------|---------|
+| `code` | `'KSEF_API_ERROR'` |
+| `statusCode` | Kod HTTP odpowiedzi (np. 401, 500) |
+
+## KsefSessionError
+
+Błąd sesji KSeF (wygaśnięcie, brak autoryzacji).
+
+```typescript
+class KsefSessionError extends KsefnikError {
+  constructor(message: string, context?: Record<string, unknown>)
+}
+```
+
+| Pole | Wartość |
+|------|---------|
+| `code` | `'KSEF_SESSION_ERROR'` |
+
+## KsefTimeoutError
+
+Timeout komunikacji z KSeF.
+
+```typescript
+class KsefTimeoutError extends KsefnikError {
+  constructor(message: string, context?: Record<string, unknown>)
+}
+```
+
+| Pole | Wartość |
+|------|---------|
+| `code` | `'KSEF_TIMEOUT_ERROR'` |
+
+## InvoiceValidationError
+
+Błąd walidacji faktury — konkretna reguła na konkretnym polu.
+
+```typescript
+class InvoiceValidationError extends KsefnikError {
+  readonly rule: string
+  readonly field: string
+  readonly value: unknown
+
+  constructor(rule: string, field: string, value: unknown, message?: string)
+}
+```
+
+| Pole | Wartość |
+|------|---------|
+| `code` | `'VALIDATION_INVOICE'` |
+| `rule` | Nazwa reguły (np. `'nip-format'`) |
+| `field` | Pole faktury (np. `'sellerNIP'`) |
+| `value` | Wartość, która nie przeszła walidacji |
+
+## BankParseError
+
+Błąd parsowania wyciągu bankowego.
+
+```typescript
+class BankParseError extends KsefnikError {
+  constructor(message: string, context?: Record<string, unknown>)
+}
+```
+
+| Pole | Wartość |
+|------|---------|
+| `code` | `'BANK_PARSE_ERROR'` |
+
+## UnsupportedBankFormatError
+
+Nierozpoznany format wyciągu bankowego (żaden parser nie pasuje).
+
+```typescript
+class UnsupportedBankFormatError extends KsefnikError {
+  constructor(format: string)
+}
+```
+
+| Pole | Wartość |
+|------|---------|
+| `code` | `'BANK_FORMAT_UNSUPPORTED'` |
+| `context.format` | Nazwa formatu (np. `'unknown'`) |
+
+## ReconciliationError
+
+Błąd w trakcie uzgadniania.
+
+```typescript
+class ReconciliationError extends KsefnikError {
+  constructor(message: string, context?: Record<string, unknown>)
+}
+```
+
+| Pole | Wartość |
+|------|---------|
+| `code` | `'RECONCILIATION_ERROR'` |
+
+## Wzorzec obsługi błędów
+
+```typescript
+import {
+  KsefnikError,
+  KsefApiError,
+  KsefSessionError,
+  KsefTimeoutError,
+  BankParseError,
+  UnsupportedBankFormatError,
+} from '@ksefnik/shared'
+
+try {
+  const invoices = await ksefnik.invoices.fetch({
+    from: '2025-01-01',
+    to: '2025-12-31',
+  })
+} catch (error) {
+  if (error instanceof KsefTimeoutError) {
+    console.log('KSeF nie odpowiada — spróbuj ponownie za chwilę')
+  } else if (error instanceof KsefSessionError) {
+    console.log('Sesja wygasła — odśwież token')
+  } else if (error instanceof KsefApiError) {
+    console.log(`Błąd API KSeF (HTTP ${error.statusCode}): ${error.message}`)
+  } else if (error instanceof KsefnikError) {
+    console.log(`Błąd ksefnik [${error.code}]: ${error.message}`)
+  } else {
+    throw error // Nieznany błąd — propaguj dalej
+  }
+}
+```
+
+<Aside type="tip">
+  Sprawdzaj od najbardziej szczegółowego do najbardziej ogólnego (`instanceof` sprawdza hierarchię dziedziczenia).
+  `KsefnikError` łapie wszystkie błędy ksefnik.
+</Aside>
+
+## Obsługa błędów bankowych
+
+```typescript
+import { readFileSync } from 'node:fs'
+
+try {
+  const content = readFileSync('./wyciag.csv', 'utf-8')
+  const txs = await ksefnik.bank.importFromString(content)
+} catch (error) {
+  if (error instanceof UnsupportedBankFormatError) {
+    console.log(`Nieobsługiwany format: ${error.context?.format}`)
+    console.log('Obsługiwane: MT940, mBank, ING, PKO, Santander')
+  } else if (error instanceof BankParseError) {
+    console.log(`Błąd parsowania: ${error.message}`)
+  }
+}
+```

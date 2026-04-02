@@ -1,0 +1,65 @@
+---
+title: "Narzędzie: send-invoice"
+description: Wysyłanie faktury XML do KSeF.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Narzędzie `send-invoice` wysyła fakturę w formacie XML do Krajowego Systemu e-Faktur i zwraca numer referencyjny.
+
+## Parametry wejściowe
+
+| Parametr | Typ | Wymagany | Opis |
+|----------|-----|----------|------|
+| `xml` | `string` | Tak | Treść faktury w formacie XML (schemat FA(2)) |
+| `nip` | `string` | Tak | NIP podmiotu wysyłającego |
+
+## Format odpowiedzi
+
+```ts
+{
+  ksefReference: string
+  timestamp: string
+}
+```
+
+## Przykład wywołania
+
+```json
+{
+  "name": "send-invoice",
+  "arguments": {
+    "xml": "<?xml version=\"1.0\"?><Faktura>...</Faktura>",
+    "nip": "1234567890"
+  }
+}
+```
+
+## Przykład odpowiedzi
+
+```json
+{
+  "ksefReference": "KSeF-1234567890-20260315-ABC123DEF456",
+  "timestamp": "2026-03-15T10:30:00Z"
+}
+```
+
+## Kiedy używać
+
+- Gdy użytkownik prosi o wysłanie faktury do KSeF
+- W zautomatyzowanym procesie generowania i wysyłki faktur
+- Po walidacji faktury narzędziem `validate-invoice`
+
+<Aside type="caution">
+Wysyłka faktury jest operacją nieodwracalną. AI powinien zawsze potwierdzić z użytkownikiem przed wysłaniem.
+</Aside>
+
+<Aside type="tip">
+Przed wysyłką warto zwalidować fakturę narzędziem `validate-invoice`, aby uniknąć odrzucenia przez KSeF.
+</Aside>
+
+## Powiązane narzędzia
+
+- `validate-invoice` -- zwaliduj fakturę przed wysyłką
+- `sync-invoices` -- pobierz wysłaną fakturę po referencji
+- `query-invoices` -- wyszukaj fakturę po numerze

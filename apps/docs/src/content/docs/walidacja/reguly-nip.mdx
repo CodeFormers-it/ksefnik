@@ -1,0 +1,108 @@
+---
+title: Reguły NIP
+description: Reguły walidacji numerów NIP na fakturach.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Ksefnik zawiera 4 reguły walidujące poprawność numerów NIP na fakturach.
+
+## nip-format
+
+Sprawdza, czy NIP sprzedawcy (`sellerNIP`) ma poprawny format i sumę kontrolną.
+
+```typescript
+import { nipFormatRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `sellerNIP` | 10 cyfr + poprawna suma kontrolna |
+
+**Suma kontrolna NIP**: wagi `[6, 5, 7, 2, 3, 4, 5, 6, 7]` pomnożone przez pierwsze 9 cyfr, suma modulo 11 musi być równa 10. cyfrze.
+
+| NIP | Wynik | Powód |
+|-----|-------|-------|
+| `5213456789` | valid | poprawna suma kontrolna |
+| `1234567890` | invalid | błędna suma kontrolna |
+| `521345678` | invalid | za mało cyfr |
+| `52134567AB` | invalid | zawiera litery |
+
+## buyer-nip-format
+
+Sprawdza sumę kontrolną NIP nabywcy (`buyerNIP`), jeśli jest podany.
+
+```typescript
+import { buyerNipFormatRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `buyerNIP` | poprawna suma kontrolna (jeśli pole jest obecne) |
+
+<Aside type="note">
+  Reguła pomija walidację, jeśli `buyerNIP` nie jest podany (zwraca `valid: true`). Dzięki temu faktury bez NIP nabywcy nie generują fałszywych błędów.
+</Aside>
+
+## nip-not-zeros
+
+Sprawdza, czy NIP sprzedawcy nie składa się z samych zer.
+
+```typescript
+import { nipNotZerosRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `sellerNIP` | nie jest `0000000000` |
+
+| NIP | Wynik |
+|-----|-------|
+| `5213456789` | valid |
+| `0000000000` | invalid |
+
+## seller-buyer-different
+
+Sprawdza, czy NIP sprzedawcy i nabywcy są różne (wystawca nie fakturuje sam siebie).
+
+```typescript
+import { sellerBuyerDifferentRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `buyerNIP` | `sellerNIP !== buyerNIP` (jeśli `buyerNIP` obecny) |
+
+<Aside type="caution">
+  Reguła pomija sprawdzenie, jeśli `buyerNIP` nie jest podany. W przypadku faktury, gdzie sprzedawca i nabywca mają ten sam NIP, reguła zwraca `valid: false`.
+</Aside>
+
+## Helper: isValidNIP
+
+Wszystkie reguły NIP korzystają z funkcji pomocniczej eksportowanej z `@ksefnik/shared`:
+
+```typescript
+import { isValidNIP } from '@ksefnik/shared'
+
+isValidNIP('5213456789')  // true
+isValidNIP('0000000000')  // true (checksum OK, ale nip-not-zeros to złapie)
+isValidNIP('1234567890')  // false
+isValidNIP('abc')          // false
+```
+
+<Aside type="tip">
+  `isValidNIP` sprawdza tylko format (10 cyfr) i sumę kontrolną. Nie sprawdza, czy NIP jest aktywny w CEIDG/KRS. Do sprawdzenia zerowych NIP-ów służy osobna reguła `nip-not-zeros`.
+</Aside>
+
+## Użycie
+
+```typescript
+import { validateInvoice, nipFormatRule, buyerNipFormatRule,
+         nipNotZerosRule, sellerBuyerDifferentRule } from '@ksefnik/core'
+
+const nipRules = [nipFormatRule, buyerNipFormatRule, nipNotZerosRule, sellerBuyerDifferentRule]
+const report = validateInvoice(invoice, nipRules)
+
+const nipErrors = report.results.filter(r => !r.valid)
+// [{ rule: 'nip-format', field: 'sellerNIP', message: 'Invalid seller NIP checksum' }]
+```

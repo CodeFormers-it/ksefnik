@@ -1,0 +1,87 @@
+---
+title: "Scenariusz: upo-delay"
+description: Symulacja opóźnionego UPO -- potwierdzenie dostępne dopiero po ponownym odpytaniu.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components'
+
+Scenariusz `upo-delay` symuluje realistyczne zachowanie KSeF, w którym UPO (Urzędowe Poświadczenie Odbioru) nie jest dostępne natychmiast po wysłaniu faktury. Pierwsze zapytanie zwraca status `pending`, dopiero drugie -- `confirmed`.
+
+## Zachowanie
+
+| Operacja | Rezultat |
+|----------|----------|
+| `fetchInvoices` | Działa normalnie |
+| `sendInvoice` | Działa normalnie |
+| `getUpo` (1. wywołanie) | Status `pending` |
+| `getUpo` (2. wywołanie) | Status `confirmed` |
+
+## Stan wewnętrzny
+
+Scenariusz utrzymuje mapę `callCounts` per referencja KSeF. Pierwsze wywołanie `getUpo` dla danej referencji zwraca `pending`, drugie i kolejne -- `confirmed`.
+
+```ts
+// Uproszczony mechanizm
+const callCounts = new Map<string, number>()
+
+const hooks = {
+  beforeGetUpo: (reference: string) => {
+    const count = (callCounts.get(reference) ?? 0) + 1
+    callCounts.set(reference, count)
+
+    if (count === 1) {
+      return { status: 'pending', ksefReference: reference }
+    }
+    // count >= 2 -- domyślne zachowanie (confirmed)
+  },
+}
+```
+
+## Kiedy używać
+
+- Testowanie logiki polling UPO
+- Weryfikacja obsługi statusu `pending`
+- Testowanie UI z komunikatem "oczekiwanie na potwierdzenie"
+
+## Przykład
+
+<Steps>
+1. Wyślij fakturę
+2. Odpytaj UPO -- otrzymasz `pending`
+3. Odpytaj ponownie -- otrzymasz `confirmed`
+</Steps>
+
+```ts
+import { createKsefSimulator } from '@ksefnik/simulator'
+import { createKsefnik } from '@ksefnik/core'
+
+const { adapter } = createKsefSimulator({
+  scenario: 'upo-delay',
+})
+
+const ksefnik = createKsefnik({
+  nip: '1234567890',
+  adapter,
+})
+
+// Wyślij fakturę
+const sent = await ksefnik.invoices.send({
+  xml: '<Invoice>...</Invoice>',
+})
+
+// Pierwsze odpytanie -- pending
+const first = await ksefnik.invoices.getUpo({
+  ksefReference: sent.ksefReference,
+})
+console.log(first.status) // "pending"
+
+// Drugie odpytanie -- confirmed
+const second = await ksefnik.invoices.getUpo({
+  ksefReference: sent.ksefReference,
+})
+console.log(second.status) // "confirmed"
+```
+
+<Aside>
+Każda referencja KSeF ma osobny licznik. Możesz wysłać wiele faktur i każda z nich przejdzie przez cykl pending / confirmed niezależnie.
+</Aside>

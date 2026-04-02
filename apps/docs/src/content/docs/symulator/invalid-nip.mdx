@@ -1,0 +1,80 @@
+---
+title: "Scenariusz: invalid-nip"
+description: Symulacja odrzucenia faktury przez KSeF z powodu nieprawidłowego NIP.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Scenariusz `invalid-nip` symuluje sytuację, w której KSeF odrzuca wysyłaną fakturę z powodu nieprawidłowego numeru NIP. Przydatny do testowania obsługi błędów walidacji po stronie serwera.
+
+## Zachowanie
+
+| Operacja | Rezultat |
+|----------|----------|
+| `fetchInvoices` | Działa normalnie |
+| `sendInvoice` | `KsefApiError(400)` z kontekstem NIP |
+| `getUpo` | Działa normalnie |
+
+## Hooks
+
+Scenariusz rejestruje hook `beforeSend`, który rzuca `KsefApiError` z kodem HTTP 400 i informacją o nieprawidłowym NIP.
+
+## Kiedy używać
+
+- Testowanie walidacji NIP przed wysyłką
+- Weryfikacja obsługi błędów 400 z KSeF
+- Testowanie komunikatów błędów wyświetlanych użytkownikowi
+
+## Przykład
+
+```ts
+import { createKsefSimulator } from '@ksefnik/simulator'
+import { createKsefnik } from '@ksefnik/core'
+import { KsefApiError } from '@ksefnik/shared'
+
+const { adapter } = createKsefSimulator({
+  scenario: 'invalid-nip',
+})
+
+const ksefnik = createKsefnik({
+  nip: '0000000000',
+  adapter,
+})
+
+try {
+  await ksefnik.invoices.send({
+    xml: '<Invoice>...</Invoice>',
+  })
+} catch (error) {
+  if (error instanceof KsefApiError) {
+    console.log(error.statusCode) // 400
+    console.log(error.code)       // "INVALID_NIP"
+    console.log(error.context)    // { nip: "0000000000" }
+    console.log(error.message)    // "NIP 0000000000 is not valid"
+  }
+}
+```
+
+## Użycie w testach
+
+```ts
+import { describe, it, expect } from 'vitest'
+import { createKsefSimulator } from '@ksefnik/simulator'
+import { createKsefnik } from '@ksefnik/core'
+import { KsefApiError } from '@ksefnik/shared'
+
+describe('walidacja NIP', () => {
+  it('powinien zwrócić błąd dla nieprawidłowego NIP', async () => {
+    const { adapter } = createKsefSimulator({ scenario: 'invalid-nip' })
+    const ksefnik = createKsefnik({ nip: '0000000000', adapter })
+
+    await expect(
+      ksefnik.invoices.send({ xml: '<Invoice/>' })
+    ).rejects.toThrow(KsefApiError)
+  })
+})
+```
+
+<Aside type="tip">
+Fetch działa normalnie w tym scenariuszu -- błąd występuje tylko przy wysyłaniu faktur. Pozwala to testować scenariusze, w których pobieranie działa, ale wysyłka jest odrzucana.
+</Aside>

@@ -1,0 +1,143 @@
+---
+title: Cache TTL
+description: Buforowanie odpowiedzi z API KSeF z konfigurowalnym czasem zycia.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components'
+
+## Klasa TtlCache
+
+`TtlCache` to prosty cache in-memory z automatycznym wygasaniem wpisow po skonfigurowanym czasie (TTL -- Time To Live).
+
+```ts
+import { TtlCache } from '@ksefnik/core'
+
+const cache = new TtlCache(5 * 60 * 1000) // 5 minut TTL
+```
+
+## API
+
+```ts
+class TtlCache {
+  constructor(ttlMs?: number)          // domyslnie 5 minut
+
+  get<T>(key: string): T | undefined   // pobierz wartosc (undefined jesli wygasla)
+  set<T>(key: string, value: T): void  // zapisz wartosc z TTL
+  invalidate(key: string): void        // usun konkretny wpis
+  invalidateAll(): void                // usun wszystkie wpisy
+  get size(): number                   // liczba wpisow w cache
+}
+```
+
+## Automatyczne wygasanie
+
+Wpisy wygasaja automatycznie -- nie ma potrzeby recznego czyszczenia. Przy kazdym `get()` sprawdzany jest czas wygasniecia:
+
+```ts
+get<T>(key: string): T | undefined {
+  const entry = this.store.get(key)
+  if (!entry) return undefined
+  if (Date.now() > entry.expiresAt) {
+    this.store.delete(key)  // usun wygasly wpis
+    return undefined
+  }
+  return entry.value as T
+}
+```
+
+<Aside type="note">
+  Wygasle wpisy sa usuwane leniwie (lazy eviction) -- dopiero przy probie odczytu. Jesli wpis wygasnie i nikt go nie odczyta, pozostanie w pamieci do nastepnego `get()` lub `invalidateAll()`.
+</Aside>
+
+## Funkcja cacheKey
+
+Deterministyczna serializacja parametrow zapytania do klucza cache:
+
+```ts
+import { cacheKey } from '@ksefnik/core'
+
+const key = cacheKey({ from: '2026-03-01', to: '2026-03-31', nip: '5213456784' })
+// '{"from":"2026-03-01","nip":"5213456784","to":"2026-03-31"}'
+```
+
+Klucze obiektu sa **sortowane alfabetycznie**, wiec kolejnosc przekazania parametrow nie ma znaczenia:
+
+```ts
+cacheKey({ to: '2026-03-31', from: '2026-03-01' })
+// '{"from":"2026-03-01","to":"2026-03-31"}' -- identyczny wynik
+```
+
+## Przyklad: cache dla fetchInvoices
+
+```ts
+const cache = new TtlCache(5 * 60 * 1000) // 5 min
+
+async function fetchInvoicesWithCache(
+  adapter: KsefAdapter,
+  opts: FetchInvoicesOpts,
+): Promise<Invoice[]> {
+  const key = cacheKey(opts)
+
+  // Sprawdz cache
+  const cached = cache.get<Invoice[]>(key)
+  if (cached) return cached
+
+  // Pobierz z API
+  const invoices = await adapter.fetchInvoices(opts)
+
+  // Zapisz w cache
+  cache.set(key, invoices)
+
+  return invoices
+}
+```
+
+## Kiedy invalidowac
+
+<Tabs>
+  <TabItem label="Po wysylce faktury">
+    ```ts
+    async function sendAndInvalidate(adapter: KsefAdapter, input: SendInvoiceInput) {
+      const result = await adapter.sendInvoice(input)
+
+      // Cache moze zawierac nieaktualna liste faktur
+      cache.invalidateAll()
+
+      return result
+    }
+    ```
+  </TabItem>
+  <TabItem label="Po imporcie wyciagu">
+    ```ts
+    async function importAndInvalidate(statement: string) {
+      const transactions = await ksefnik.bank.import(statement)
+
+      // Wyniki uzgadniania moga sie zmienic
+      reconciliationCache.invalidateAll()
+
+      return transactions
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+## Konfiguracja TTL
+
+| Scenariusz | Sugerowany TTL | Powod |
+|-----------|---------------|-------|
+| Developerzy testujacy | 30 s | Czeste zmiany, szybki feedback |
+| Skrypt batch | 10 min | Dane sie nie zmieniaja podczas przetwarzania |
+| Serwer MCP | 5 min (domyslne) | Balans miedzy swiezoscia a wydajnoscia |
+| CI/CD | 0 (wylaczony) | Zawsze swieze dane |
+
+```ts
+// Wylaczenie cache -- TTL 0 ms
+const noCache = new TtlCache(0)
+
+// Dlugi cache -- 30 minut
+const longCache = new TtlCache(30 * 60 * 1000)
+```
+
+<Aside type="caution">
+  Cache jest **in-memory** i nie przetrwa restartu procesu. Nie nadaje sie jako trwaly storage -- do tego uzyj SQLite storage z `@ksefnik/core`.
+</Aside>

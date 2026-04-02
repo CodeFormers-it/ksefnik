@@ -1,0 +1,129 @@
+---
+title: "Pass 300: invoice-ref"
+description: Dopasowanie po numerze faktury w tytule przelewu.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components'
+
+## Parametry
+
+| Pole | Wartosc |
+|------|---------|
+| **name** | `invoice-ref` |
+| **order** | `300` |
+| **confidence** | `90%` (z dopasowaniem kwoty) / `75%` (bez) |
+
+## Strategia
+
+Pass szuka `invoice.invoiceNumber` jako podciagu w `transaction.description`. Porownanie jest **case-insensitive**.
+
+Dwa poziomy pewnosci:
+- **90%** -- numer faktury znaleziony w tytule **i** kwota sie zgadza
+- **75%** -- numer faktury znaleziony, ale kwota nie pasuje
+
+## Obslugiwane formaty numerow
+
+Pass nie wymaga konkretnego formatu -- szuka dowolnego `invoiceNumber` jako substring. Obsluguje wiec naturalnie wszystkie konwencje:
+
+| Format | Przyklad |
+|--------|----------|
+| Slash | `FV/2026/03/001` |
+| Spacja | `FA 123/2026` |
+| Myslnik | `FV-2026-03-001` |
+| Krotki | `001/03/2026` |
+
+## Kod zrodlowy
+
+```ts
+const invoiceRefPass: ReconciliationPass = {
+  name: 'invoice-ref',
+  order: 300,
+
+  async run(context: MatchingContext): Promise<MatchResult[]> {
+    const results: MatchResult[] = []
+    const usedTxIds = new Set<string>()
+
+    for (const invoice of context.invoices) {
+      const ref = invoice.invoiceNumber.toLowerCase()
+
+      for (const tx of context.transactions) {
+        if (usedTxIds.has(tx.id)) continue
+
+        if (tx.description.toLowerCase().includes(ref)) {
+          const amountMatches = Math.abs(tx.amount) === invoice.grossAmount
+          const confidence = amountMatches ? 90 : 75
+          const reasons = [
+            `Invoice number "${invoice.invoiceNumber}" found in transaction description`,
+          ]
+          if (amountMatches) reasons.push('Amount also matches')
+
+          results.push({
+            invoiceId: invoice.id,
+            transactionId: tx.id,
+            confidence,
+            reasons,
+          })
+          usedTxIds.add(tx.id)
+          break
+        }
+      }
+    }
+
+    return results
+  },
+}
+```
+
+## Przyklad -- 90% (z kwota)
+
+```ts
+const invoice = {
+  id: 'inv-001',
+  invoiceNumber: 'FV/2026/03/001',
+  sellerNIP: '5213456784',
+  grossAmount: 246000, // 2 460,00 PLN
+  issueDate: '2026-03-01',
+}
+
+const transaction = {
+  id: 'tx-001',
+  date: '2026-03-15',
+  amount: -246000,
+  description: 'Zaplata za FV/2026/03/001',
+}
+
+// -> confidence: 90, reasons: ["Invoice number found...", "Amount also matches"]
+```
+
+## Przyklad -- 75% (bez kwoty)
+
+```ts
+const invoice = {
+  id: 'inv-002',
+  invoiceNumber: 'FA 789/2026',
+  sellerNIP: '1234567890',
+  grossAmount: 500000, // 5 000,00 PLN
+  issueDate: '2026-02-15',
+}
+
+const transaction = {
+  id: 'tx-002',
+  date: '2026-03-01',
+  amount: -480000, // inna kwota (np. po potraceniu)
+  description: 'Przelew za FA 789/2026 minus kompensata',
+}
+
+// -> confidence: 75, reasons: ["Invoice number found..."]
+```
+
+<Aside type="tip">
+  Dopasowanie z confidence 75% to dobry kandydat do recznego potwierdzenia. Uzyj `reconciliation.confirmMatch(matchId)` w API albo flagi `--confirm` w CLI.
+</Aside>
+
+## Kiedy NIE dziala
+
+<Aside type="caution">
+  - Kontrahent nie wpisal numeru faktury w tytule przelewu
+  - Numer faktury jest zbyt krotki i pojawia sie w wielu tytulach (np. `1/2026`)
+  - Tytul przelewu zawiera zmodyfikowany numer (np. `FV 2026/03/001` zamiast `FV/2026/03/001`)
+</Aside>

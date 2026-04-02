@@ -1,0 +1,124 @@
+---
+title: "Pass 100: ksef-ref"
+description: Dopasowanie po referencji KSeF -- najwyzsza pewnosc w pipeline.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components'
+
+## Parametry
+
+| Pole | Wartosc |
+|------|---------|
+| **name** | `ksef-ref` |
+| **order** | `100` |
+| **confidence** | `99%` |
+
+## Strategia
+
+Pass szuka wartosci `invoice.ksefReference` jako podciagu w `transaction.description`. Porownanie jest **case-insensitive**.
+
+```
+invoice.ksefReference = "1234567890-20260315-ABC123DEF456"
+
+transaction.description = "Zaplata za FV 03/2026 KSeF:1234567890-20260315-ABC123DEF456"
+                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                                  zawiera referencje -> match 99%
+```
+
+## Jak dziala
+
+<Steps>
+1. Iteruj po niesparowanych fakturach
+2. Pomin faktury bez `ksefReference`
+3. Dla kazdej faktury przeszukaj niesparowane transakcje
+4. Jesli `tx.description.toLowerCase()` zawiera `invoice.ksefReference.toLowerCase()` -- dopasuj
+5. Przejdz do nastepnej faktury (break po pierwszym trafieniu)
+</Steps>
+
+## Kod zrodlowy
+
+```ts
+const ksefRefPass: ReconciliationPass = {
+  name: 'ksef-ref',
+  order: 100,
+
+  async run(context: MatchingContext): Promise<MatchResult[]> {
+    const results: MatchResult[] = []
+
+    for (const invoice of context.invoices) {
+      if (!invoice.ksefReference) continue
+
+      const ref = invoice.ksefReference.toLowerCase()
+
+      for (const tx of context.transactions) {
+        if (tx.description.toLowerCase().includes(ref)) {
+          results.push({
+            invoiceId: invoice.id,
+            transactionId: tx.id,
+            confidence: 99,
+            reasons: [
+              `KSeF reference "${invoice.ksefReference}" found in transaction description`,
+            ],
+          })
+          break
+        }
+      }
+    }
+
+    return results
+  },
+}
+```
+
+## Przyklad uzycia
+
+```ts
+const invoices = [
+  {
+    id: 'inv-001',
+    invoiceNumber: 'FV/2026/03/001',
+    sellerNIP: '5213456784',
+    grossAmount: 123000, // 1 230,00 PLN w groszach
+    currency: 'PLN',
+    issueDate: '2026-03-15',
+    ksefReference: '1234567890-20260315-ABC123DEF456',
+    sellerName: 'TechSolutions Sp. z o.o.',
+  },
+]
+
+const transactions = [
+  {
+    id: 'tx-001',
+    date: '2026-03-20',
+    amount: -123000,
+    currency: 'PLN',
+    description: 'Przelew za FV/2026/03/001 KSeF:1234567890-20260315-ABC123DEF456',
+    senderName: 'Moja Firma Sp. z o.o.',
+  },
+]
+
+const report = await runPipeline(invoices, transactions, [ksefRefPass])
+// report.matched[0].confidence === 99
+// report.matched[0].passName === 'ksef-ref'
+```
+
+## Kiedy dziala
+
+- Kontrahent wpisuje numer KSeF w tytule przelewu
+- System ERP automatycznie dodaje referencje KSeF do przelewu
+- Przelew z mechanizmem podzielonej platnosci (MPP) zawiera numer KSeF
+
+## Kiedy NIE dziala
+
+<Aside type="caution">
+  Ten pass nie dopasuje transakcji, jesli:
+  - Faktura nie ma `ksefReference` (nie zostala pobrana z KSeF)
+  - Przelew nie zawiera numeru KSeF w tytule (starsze przelewy sprzed wdrozenia KSeF)
+  - Numer KSeF w tytule przelewu zawiera literowke
+
+  W takich przypadkach pipeline przejdzie do kolejnych passow o nizszej pewnosci.
+</Aside>
+
+## Dlaczego 99%, a nie 100%?
+
+Numer KSeF jest unikatowy w skali krajowej, wiec ryzyko falszywego dopasowania jest minimalne. Zostawiamy 1% marginesu na sytuacje wyjatkowe -- np. recznie wpisany numer z bledem, ktory przypadkowo pasuje do innej faktury.

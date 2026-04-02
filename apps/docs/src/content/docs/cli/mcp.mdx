@@ -1,0 +1,99 @@
+---
+title: "Komenda: mcp"
+description: Uruchamianie serwera MCP dla asystentów AI.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components'
+
+Komenda `mcp` uruchamia serwer Model Context Protocol, który pozwala asystentom AI (Claude, Cursor) korzystać z ksefnik jako narzędzia.
+
+## Użycie
+
+```bash
+ksefnik mcp [--stdio]
+```
+
+## Parametry
+
+| Parametr | Wymagany | Opis |
+|----------|----------|------|
+| `--stdio` | Nie | Użyj transportu stdio (domyślnie) |
+
+## Działanie
+
+Serwer MCP nasłuchuje na stdin i odpowiada na stdout, zgodnie ze specyfikacją MCP. Proces nie kończy się sam -- działa do momentu zamknięcia strumienia wejściowego.
+
+Udostępniane narzędzia MCP:
+- `sync-invoices` -- synchronizacja faktur z KSeF
+- `import-bank` -- import wyciągu bankowego
+- `reconcile` -- uzgadnianie faktur z przelewami
+- `get-unmatched` -- pobranie nieuzgodnionych pozycji
+- `query-invoices` -- wyszukiwanie faktur
+- `send-invoice` -- wysyłka faktury
+- `validate-invoice` -- walidacja faktury
+- `confirm-match` -- potwierdzenie dopasowania
+
+## Podpięcie do klienta AI
+
+<Tabs>
+  <TabItem label="Claude Desktop">
+    Dodaj do `claude_desktop_config.json`:
+    ```json
+    {
+      "mcpServers": {
+        "ksefnik": {
+          "command": "ksefnik",
+          "args": ["mcp", "--stdio"],
+          "env": {
+            "KSEFNIK_NIP": "1234567890",
+            "KSEFNIK_TOKEN": "eyJhbGciOi...",
+            "KSEFNIK_ENV": "demo"
+          }
+        }
+      }
+    }
+    ```
+  </TabItem>
+  <TabItem label="Cursor">
+    Dodaj do `.cursor/mcp.json` w projekcie:
+    ```json
+    {
+      "mcpServers": {
+        "ksefnik": {
+          "command": "ksefnik",
+          "args": ["mcp", "--stdio"],
+          "env": {
+            "KSEFNIK_NIP": "1234567890",
+            "KSEFNIK_TOKEN": "eyJhbGciOi..."
+          }
+        }
+      }
+    }
+    ```
+  </TabItem>
+  <TabItem label="Claude Code">
+    Dodaj do `.claude/settings.json`:
+    ```json
+    {
+      "mcpServers": {
+        "ksefnik": {
+          "command": "ksefnik",
+          "args": ["mcp", "--stdio"],
+          "env": {
+            "KSEFNIK_NIP": "1234567890",
+            "KSEFNIK_TOKEN": "eyJhbGciOi..."
+          }
+        }
+      }
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+<Aside type="caution">
+Serwer MCP działa w tle i nie wyświetla żadnych danych w terminalu. Cała komunikacja odbywa się przez stdio.
+</Aside>
+
+<Aside>
+Szczegóły każdego narzędzia MCP opisane są w sekcji Serwer MCP.
+</Aside>

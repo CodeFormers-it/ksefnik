@@ -1,0 +1,190 @@
+---
+title: Własne reguły
+description: Jak tworzyć własne reguły walidacji faktur.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components'
+
+Silnik walidacji ksefnik jest rozszerzalny. Możesz tworzyć własne reguły i łączyć je z wbudowanymi.
+
+## Interfejs ValidationRule
+
+Każda reguła musi implementować interfejs:
+
+```typescript
+interface ValidationRule {
+  name: string
+  validate(invoice: Invoice, context?: ValidationContext): ValidationResult[]
+}
+
+interface ValidationResult {
+  valid: boolean
+  rule: string
+  field?: string
+  message?: string
+  value?: unknown
+}
+
+interface ValidationContext {
+  allInvoices?: Invoice[]
+  now?: Date
+}
+```
+
+## Tworzenie reguły krok po kroku
+
+<Steps>
+1. Zdefiniuj obiekt implementujący `ValidationRule`
+2. W `validate()` sprawdź warunek i zwróć tablicę `ValidationResult`
+3. Dodaj regułę do pipeline walidacji
+</Steps>
+
+## Przykład: reguła sprawdzająca poprawność VAT
+
+Reguła weryfikująca, czy kwota brutto jest poprawnie obliczona z netto + VAT (23%):
+
+```typescript
+import type { ValidationRule, ValidationResult } from '@ksefnik/core'
+import type { Invoice } from '@ksefnik/shared'
+
+export const vatRate23Rule: ValidationRule = {
+  name: 'vat-rate-23',
+  validate(invoice: Invoice): ValidationResult[] {
+    if (invoice.netAmount === undefined) {
+      return [{ valid: true, rule: 'vat-rate-23' }]
+    }
+
+    const expectedGross = Math.round(invoice.netAmount * 1.23)
+    const diff = Math.abs(invoice.grossAmount - expectedGross)
+
+    return [{
+      valid: diff <= 1,  // tolerancja 1 grosz
+      rule: 'vat-rate-23',
+      field: 'grossAmount',
+      message: diff > 1
+        ? `Kwota brutto (${invoice.grossAmount}) nie odpowiada netto * 1.23 (${expectedGross})`
+        : undefined,
+      value: invoice.grossAmount,
+    }]
+  },
+}
+```
+
+## Dodanie do pipeline
+
+Połącz własną regułę z wbudowanymi:
+
+```typescript
+import { validateInvoices, allRules } from '@ksefnik/core'
+import { vatRate23Rule } from './rules/vat-rate-23.js'
+
+const myRules = [...allRules, vatRate23Rule]
+const reports = validateInvoices(invoices, myRules)
+```
+
+Lub użyj tylko wybranych reguł:
+
+```typescript
+import { validateInvoice, nipFormatRule, amountPositiveRule } from '@ksefnik/core'
+
+const reports = validateInvoice(invoice, [nipFormatRule, amountPositiveRule, vatRate23Rule])
+```
+
+## Korzystanie z kontekstu
+
+Kontekst daje dostęp do pełnej listy faktur i bieżącej daty:
+
+```typescript
+export const maxMonthlyAmountRule: ValidationRule = {
+  name: 'max-monthly-amount',
+  validate(invoice: Invoice, context?: ValidationContext): ValidationResult[] {
+    if (!context?.allInvoices) {
+      return [{ valid: true, rule: 'max-monthly-amount' }]
+    }
+
+    const month = invoice.issueDate.slice(0, 7) // YYYY-MM
+    const monthlyTotal = context.allInvoices
+      .filter(i => i.sellerNIP === invoice.sellerNIP && i.issueDate.startsWith(month))
+      .reduce((sum, i) => sum + i.grossAmount, 0)
+
+    const MAX_MONTHLY = 50000_00 // 50 000,00 PLN w groszach
+
+    return [{
+      valid: monthlyTotal <= MAX_MONTHLY,
+      rule: 'max-monthly-amount',
+      field: 'grossAmount',
+      message: monthlyTotal > MAX_MONTHLY
+        ? `Suma faktur od ${invoice.sellerNIP} w ${month}: ${monthlyTotal} gr > limit ${MAX_MONTHLY} gr`
+        : undefined,
+    }]
+  },
+}
+```
+
+<Aside type="tip">
+  Kontekst `allInvoices` jest automatycznie tworzony przez `validateInvoices()`. Przy użyciu `validateInvoice()` musisz go przekazać ręcznie.
+</Aside>
+
+## Use case: reguły branżowe
+
+Przykłady własnych reguł dla konkretnych branż:
+
+```typescript
+// Branża budowlana: odwrotne obciążenie VAT
+const reverseChargeRule: ValidationRule = {
+  name: 'reverse-charge',
+  validate(invoice) {
+    if (invoice.vatAmount === undefined) return [{ valid: true, rule: 'reverse-charge' }]
+    return [{
+      valid: invoice.vatAmount === 0,
+      rule: 'reverse-charge',
+      field: 'vatAmount',
+      message: invoice.vatAmount !== 0 ? 'Odwrotne obciążenie: VAT powinien wynosić 0' : undefined,
+    }]
+  },
+}
+
+// E-commerce: numer zamówienia w opisie
+const orderNumberRule: ValidationRule = {
+  name: 'order-number-present',
+  validate(invoice) {
+    const hasOrderRef = invoice.lineItems?.some(item =>
+      /ORD-\d+/.test(item.description)
+    ) ?? false
+    return [{
+      valid: hasOrderRef,
+      rule: 'order-number-present',
+      message: !hasOrderRef ? 'Brak numeru zamówienia (ORD-xxx) w pozycjach' : undefined,
+    }]
+  },
+}
+```
+
+## Testowanie reguł
+
+```typescript
+import { describe, it, expect } from 'vitest'
+
+describe('vatRate23Rule', () => {
+  it('akceptuje poprawne kwoty', () => {
+    const invoice = {
+      grossAmount: 123000,  // 1230 PLN
+      netAmount: 100000,    // 1000 PLN
+      // ...remaining fields
+    } as Invoice
+
+    const results = vatRate23Rule.validate(invoice)
+    expect(results[0].valid).toBe(true)
+  })
+
+  it('odrzuca niepoprawne kwoty', () => {
+    const invoice = {
+      grossAmount: 130000,  // 1300 PLN (powinno być 1230)
+      netAmount: 100000,
+    } as Invoice
+
+    const results = vatRate23Rule.validate(invoice)
+    expect(results[0].valid).toBe(false)
+  })
+})
+```

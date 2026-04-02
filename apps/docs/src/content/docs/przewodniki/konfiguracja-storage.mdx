@@ -1,0 +1,215 @@
+---
+title: Konfiguracja storage
+description: Jak skonfigurować lokalne przechowywanie danych w ksefnik.
+---
+
+import { Tabs, TabItem, Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components';
+
+Ksefnik oferuje dwa typy storage: pamięciowy (domyślny) i SQLite. Storage przechowuje faktury, transakcje bankowe i raporty uzgadniania.
+
+## Dwa typy storage
+
+<CardGrid>
+  <Card title="InMemoryStorage" icon="rocket">
+    Domyślny. Dane znikają po zakończeniu procesu. Idealny do testów, skryptów jednorazowych i pipeline'ów CI.
+  </Card>
+  <Card title="SqliteStorage" icon="document">
+    Dane zapisywane na dysku w pliku `.db`. Persistence między sesjami. Idealny dla biur rachunkowych i powtarzalnych procesów.
+  </Card>
+</CardGrid>
+
+## Kiedy który?
+
+| Scenariusz | Storage | Dlaczego |
+|------------|---------|----------|
+| Testy jednostkowe | `InMemoryStorage` | Szybki, bez efektów ubocznych |
+| Skrypt jednorazowy | `InMemoryStorage` | Nie potrzebujesz historii |
+| CI/CD pipeline | `InMemoryStorage` | Każde uruchomienie zaczyna od zera |
+| Biuro rachunkowe | `SqliteStorage` | Porównanie raportów miesiąc do miesiąca |
+| Regularna reconciliation | `SqliteStorage` | Przyrostowe uzgadnianie, bez ponownego pobierania |
+| Praca z CLI | `SqliteStorage` | Stan zachowany między komendami |
+
+## Konfiguracja
+
+### InMemoryStorage (domyślny)
+
+```typescript
+import { createKsefnik } from '@ksefnik/core';
+
+// InMemoryStorage jest używany domyślnie — nie trzeba go podawać
+const ksef = createKsefnik({
+  config: { nip: '5213456784' },
+});
+```
+
+### SqliteStorage
+
+```typescript
+import { createKsefnik } from '@ksefnik/core';
+import { SqliteStorage } from '@ksefnik/core/storage';
+
+const ksef = createKsefnik({
+  config: { nip: '5213456784' },
+  storage: new SqliteStorage('./ksefnik.db'),
+});
+```
+
+<Aside type="tip">
+  CLI domyślnie używa `SqliteStorage` z plikiem `~/.ksefnik/data.db`. Możesz zmienić lokalizację flagą `--db`:
+  ```bash
+  ksefnik reconcile --db ./moj-projekt.db --bank ./wyciag.csv
+  ```
+</Aside>
+
+## Interfejs Storage
+
+Oba typy implementują ten sam interfejs:
+
+```typescript
+interface Storage {
+  // Faktury
+  saveInvoices(invoices: Invoice[]): Promise<void>;
+  getInvoices(filter?: InvoiceFilter): Promise<Invoice[]>;
+
+  // Transakcje bankowe
+  saveTransactions(transactions: BankTransaction[]): Promise<void>;
+  getTransactions(filter?: TransactionFilter): Promise<BankTransaction[]>;
+
+  // Raporty uzgadniania
+  saveReport(report: ReconciliationReport): Promise<void>;
+  getReport(id: string): Promise<ReconciliationReport | null>;
+  getReports(filter?: ReportFilter): Promise<ReconciliationReport[]>;
+}
+```
+
+## Zapisywanie i odczytywanie danych
+
+```typescript
+import { createKsefnik } from '@ksefnik/core';
+import { SqliteStorage } from '@ksefnik/core/storage';
+
+const ksef = createKsefnik({
+  config: { nip: '5213456784' },
+  storage: new SqliteStorage('./ksefnik.db'),
+});
+
+// Pobierz faktury i zapisz do storage
+const invoices = await ksef.invoices.fetch({
+  from: '2026-03-01',
+  to: '2026-03-31',
+});
+await ksef.storage.saveInvoices(invoices);
+
+// Następnego dnia — odczytaj z storage bez ponownego pobierania z KSeF
+const saved = await ksef.storage.getInvoices({
+  from: '2026-03-01',
+  to: '2026-03-31',
+});
+console.log(`Odczytano ${saved.length} faktur z bazy`);
+```
+
+## Filtrowanie zapytań
+
+### Faktury
+
+```typescript
+// Po NIP kontrahenta
+const fromSupplier = await ksef.storage.getInvoices({
+  counterpartyNip: '7740001454',
+});
+
+// Po zakresie dat
+const march = await ksef.storage.getInvoices({
+  from: '2026-03-01',
+  to: '2026-03-31',
+});
+
+// Po zakresie kwot (w groszach)
+const large = await ksef.storage.getInvoices({
+  amountFrom: 1000000, // od 10 000,00 PLN
+  amountTo: 5000000,   // do 50 000,00 PLN
+});
+```
+
+### Transakcje bankowe
+
+```typescript
+// Tylko przelewy przychodzące
+const incoming = await ksef.storage.getTransactions({
+  direction: 'incoming',
+});
+
+// Po banku źródłowym
+const mbank = await ksef.storage.getTransactions({
+  bank: 'mbank',
+});
+
+// Po zakresie dat i kwot
+const filtered = await ksef.storage.getTransactions({
+  from: '2026-03-01',
+  to: '2026-03-31',
+  amountFrom: 50000,  // od 500,00 PLN
+  amountTo: 200000,   // do 2 000,00 PLN
+});
+```
+
+### Raporty uzgadniania
+
+```typescript
+// Pobierz ostatni raport
+const reports = await ksef.storage.getReports({
+  limit: 1,
+  orderBy: 'createdAt',
+  order: 'desc',
+});
+
+// Pobierz raport po ID
+const report = await ksef.storage.getReport('report-2026-03-31-abc123');
+if (report) {
+  console.log(`Match rate: ${(report.summary.matchRate * 100).toFixed(1)}%`);
+}
+```
+
+## Własna implementacja storage
+
+Możesz zaimplementować interfejs `Storage` dla dowolnego backendu:
+
+```typescript
+import type { Storage } from '@ksefnik/core/storage';
+
+class PostgresStorage implements Storage {
+  constructor(private connectionString: string) {}
+
+  async saveInvoices(invoices: Invoice[]): Promise<void> {
+    // INSERT INTO invoices ...
+  }
+
+  async getInvoices(filter?: InvoiceFilter): Promise<Invoice[]> {
+    // SELECT * FROM invoices WHERE ...
+    return [];
+  }
+
+  // ... reszta metod
+}
+
+const ksef = createKsefnik({
+  config: { nip: '5213456784' },
+  storage: new PostgresStorage('postgresql://localhost/ksefnik'),
+});
+```
+
+<Aside type="note">
+  Własne implementacje storage muszą obsługiwać kwoty w groszach (integer) i daty w formacie `YYYY-MM-DD`. Ksefnik nie konwertuje danych przed zapisem.
+</Aside>
+
+## Przykład: biuro rachunkowe z persistence między sesjami
+
+<Steps>
+  1. Skonfiguruj SqliteStorage z dedykowanym plikiem per klient:
+     ```typescript
+     const storage = new SqliteStorage(`./dane/${clientNip}.db`);
+     ```
+  2. W poniedziałek: pobierz faktury i transakcje, uruchom reconciliation, zapisz raport.
+  3. We wtorek: odczytaj raport bez ponownego pobierania — dane są w bazie.
+  4. Na koniec miesiąca: porównaj raporty z marca i lutego, śledząc poprawę match rate.
+</Steps>

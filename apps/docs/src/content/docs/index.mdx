@@ -1,0 +1,57 @@
+---
+title: ksefnik
+description: TypeScript SDK do uzgadniania faktur KSeF z przelewami bankowymi
+template: splash
+hero:
+  tagline: "Open-source TypeScript SDK do automatycznego uzgadniania faktur KSeF z wyciągami bankowymi. 6-etapowy pipeline. 5 formatów bankowych. Zero konfiguracji."
+  actions:
+    - text: Szybki start
+      link: /wprowadzenie/szybki-start/
+      icon: right-arrow
+      variant: primary
+    - text: Referencja API
+      link: /referencja/create-ksefnik/
+      variant: minimal
+    - text: GitHub
+      link: https://github.com/CodeFormers-it/ksefnik
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components'
+
+<CardGrid>
+  <Card title="Silnik uzgadniania" icon="rocket">
+    6-etapowy pipeline dopasowania faktur do przelewów — od pewnego dopasowania po numerze KSeF, przez NIP i numer faktury, aż po fuzzy matching i proximity. Każdy krok raportuje confidence score.
+  </Card>
+  <Card title="Parsery bankowe" icon="document">
+    MT940, mBank CSV, ING CSV, PKO BP CSV, Santander CSV — z automatyczną detekcją formatu. Wystarczy podać plik, ksefnik rozpozna bank i sparsuje transakcje.
+  </Card>
+  <Card title="20 reguł walidacji" icon="approve-check-circle">
+    Walidacja NIP (checksum + GUS), kwot (brutto/netto/VAT), dat (wystawienie, sprzedaż, termin), duplikatów i spójności danych. Raporty z severity: error, warning, info.
+  </Card>
+  <Card title="Serwer MCP" icon="star">
+    8 narzędzi dla asystentów AI — Claude, Cursor, Windsurf. Synchronizuj faktury, importuj wyciągi, uzgadniaj i waliduj bezpośrednio z poziomu AI. Zero konfiguracji.
+  </Card>
+</CardGrid>
+
+## Uzgadnianie w 10 liniach
+
+```typescript
+import { createKsefnik } from '@ksefnik/core'
+import { createKsefSimulator } from '@ksefnik/simulator'
+
+// Utwórz symulator z gotowym scenariuszem
+const { adapter } = createKsefSimulator({ scenario: 'happy-path', invoices })
+const ksef = createKsefnik({
+  config: { nip: '5213456784', environment: 'test' },
+  adapter,
+})
+
+// Importuj wyciąg bankowy i uruchom uzgadnianie
+const transactions = await ksef.bank.importFromString(csvContent)
+const report = await ksef.reconciliation.run(invoices, transactions)
+
+console.log(report.summary)
+// { matchedCount: 10, unmatchedInvoices: 2, unmatchedTransactions: 1 }
+```

@@ -1,0 +1,159 @@
+---
+title: "Pass 500: proximity"
+description: Dopasowanie na podstawie bliskosci kwoty i daty -- fallback pass.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+## Parametry
+
+| Pole | Wartosc |
+|------|---------|
+| **name** | `proximity` |
+| **order** | `500` |
+| **confidence** | `50-70%` (skaluje z bliskoscia daty) |
+
+## Strategia
+
+Pass proximity to **fallback** -- lapie dopasowania, ktore przeoczyli wczesniejsze, bardziej precyzyjne passy. Stosuje dwa luźne kryteria:
+
+1. **Kwota +-5%**: `|tx.amount|` musi byc w zakresie 95%-105% wartosci `invoice.grossAmount`
+2. **Data +-30 dni**: roznica miedzy data transakcji a data faktury nie moze przekraczac 30 dni
+
+## Formula confidence
+
+```
+confidence = 50 + 20 * (1 - daysDiff / 30)
+```
+
+| Odleglosc | Confidence |
+|-----------|-----------|
+| 0 dni | 70% |
+| 7 dni | 65% |
+| 15 dni | 60% |
+| 22 dni | 55% |
+| 30 dni | 50% |
+
+Wartosc jest ograniczana przez `clampConfidence()` do zakresu 0-100 i zaokraglana do liczby calkowitej.
+
+## Data referencyjna
+
+Pass uzywa `invoice.dueDate` jesli jest dostepna. W przeciwnym razie korzysta z `invoice.issueDate`:
+
+```ts
+const referenceDate = invoice.dueDate ?? invoice.issueDate
+```
+
+<Aside type="tip">
+  `dueDate` (termin platnosci) jest lepszym odniesieniem, bo przelewy sa najczesciej realizowane blisko terminu platnosci, nie daty wystawienia.
+</Aside>
+
+## Kod zrodlowy
+
+```ts
+const proximityPass: ReconciliationPass = {
+  name: 'proximity',
+  order: 500,
+
+  async run(context: MatchingContext): Promise<MatchResult[]> {
+    const results: MatchResult[] = []
+    const usedTxIds = new Set<string>()
+
+    for (const invoice of context.invoices) {
+      const target = invoice.grossAmount
+      const minAmount = Math.floor(target * 0.95)
+      const maxAmount = Math.ceil(target * 1.05)
+      const referenceDate = invoice.dueDate ?? invoice.issueDate
+
+      let bestMatch: { txId: string; confidence: number; reasons: string[] } | null = null
+
+      for (const tx of context.transactions) {
+        if (usedTxIds.has(tx.id)) continue
+
+        const absAmount = Math.abs(tx.amount)
+        if (absAmount < minAmount || absAmount > maxAmount) continue
+
+        const daysDiff = Math.abs(
+          (new Date(tx.date).getTime() - new Date(referenceDate).getTime())
+            / (1000 * 60 * 60 * 24),
+        )
+        if (daysDiff > 30) continue
+
+        const proximityFactor = 1 - daysDiff / 30
+        const confidence = clampConfidence(50 + 20 * proximityFactor)
+
+        if (!bestMatch || confidence > bestMatch.confidence) {
+          bestMatch = {
+            txId: tx.id,
+            confidence,
+            reasons: [
+              `Amount within 5%: invoice ${target}, transaction ${absAmount}`,
+              `Date proximity: ${Math.round(daysDiff)} days apart`,
+            ],
+          }
+        }
+      }
+
+      if (bestMatch) {
+        results.push({
+          invoiceId: invoice.id,
+          transactionId: bestMatch.txId,
+          confidence: bestMatch.confidence,
+          reasons: bestMatch.reasons,
+        })
+        usedTxIds.add(bestMatch.txId)
+      }
+    }
+
+    return results
+  },
+}
+```
+
+## Przyklad
+
+```ts
+const invoice = {
+  id: 'inv-001',
+  invoiceNumber: 'FV/2026/03/112',
+  sellerNIP: '9876543210',
+  grossAmount: 500000, // 5 000,00 PLN
+  issueDate: '2026-03-01',
+  dueDate: '2026-03-15',
+}
+
+const transaction = {
+  id: 'tx-001',
+  date: '2026-03-18', // 3 dni po dueDate
+  amount: -498500,     // 4 985,00 PLN -- w zakresie 5%
+  description: 'Przelew na konto kontrahenta',
+}
+
+// daysDiff = 3
+// proximityFactor = 1 - 3/30 = 0.9
+// confidence = clampConfidence(50 + 20 * 0.9) = 68
+```
+
+## Kiedy przydatne
+
+- Przelew nie zawiera numeru KSeF, numeru faktury, ani NIP
+- Kwota rozni sie nieznacznie (np. po odliczeniu skonta)
+- Jedynym dowodem jest zblizony czas i kwota
+
+## Ograniczenia
+
+<Aside type="caution">
+  Proximity to pass o najnizszej pewnosci w pipeline. Dopasowania z tego passa powinny byc **zawsze weryfikowane recznie** przed zatwierdzeniem. Uzyj:
+
+  ```ts
+  // API
+  await ksefnik.reconciliation.confirmMatch(matchId)
+
+  // CLI
+  ksefnik reconcile --confirm
+  ```
+</Aside>
+
+<Aside type="note">
+  Pass wybiera **najlepsze** dopasowanie (najwyzsza confidence) dla kazdej faktury, nie pierwsze znalezione. Dzieki temu jesli sa dwie transakcje o podobnej kwocie, ale jedna jest blizej daty -- zostanie wybrana ta blizej.
+</Aside>

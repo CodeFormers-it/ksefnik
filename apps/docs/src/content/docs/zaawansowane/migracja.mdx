@@ -1,0 +1,195 @@
+---
+title: Migracja z konkurencji
+description: Jak przenieść się na ksefnik z innych rozwiązań KSeF — krok po kroku.
+---
+
+import { Tabs, TabItem, Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components'
+
+Przewodnik migracji na ksefnik z popularnych rozwiązań KSeF i ręcznych procesów.
+
+## Dlaczego ksefnik
+
+<CardGrid>
+  <Card title="SDK-first" icon="seti:typescript">
+    Cała logika w bibliotece TypeScript. CLI, MCP i API to cienkie wrappery. Pełna kontrola programistyczna.
+  </Card>
+  <Card title="Open-source core" icon="github">
+    Darmowy, otwarty core z 6 passami uzgadniania, 20 regułami walidacji i 5 parserami bankowymi.
+  </Card>
+  <Card title="Plugin system" icon="puzzle">
+    Rozszerzalny bez forka. Pro features jako osobne pakiety npm, bez DRM.
+  </Card>
+  <Card title="MCP-ready" icon="rocket">
+    Natywna integracja z Claude, Cursor, Windsurf i innymi narzędziami AI przez Model Context Protocol.
+  </Card>
+</CardGrid>
+
+## Z ksefapi.pl
+
+<Aside>
+  ksefapi.pl to hostowane API KSeF (SaaS). Ksefnik to SDK (biblioteka). Inne podejście, inne zalety.
+</Aside>
+
+### Porównanie
+
+| Aspekt | ksefapi.pl | ksefnik |
+|--------|-----------|---------|
+| Model | SaaS API | SDK (biblioteka npm) |
+| Cena | od 500 PLN/NIP/mies. | Core: darmowy, Pro: tańszy |
+| Hosting | Ich serwer | Twoja infrastruktura |
+| Uzgadnianie | Brak | 6-pass pipeline + pluginy |
+| AI integration | Brak | MCP server |
+| Vendor lock-in | Tak (API) | Nie (adapter pattern) |
+
+### Migracja
+
+<Steps>
+1. Zainstaluj ksefnik:
+   ```bash
+   pnpm add @ksefnik/core @ksefnik/shared
+   ```
+
+2. Stwórz adapter wrappujący istniejący klient ksefapi.pl:
+   ```typescript
+   import type { KsefAdapter } from '@ksefnik/shared'
+
+   class KsefApiPlAdapter implements KsefAdapter {
+     constructor(private apiKey: string) {}
+
+     async fetchInvoices(opts) {
+       const res = await fetch('https://api.ksefapi.pl/invoices', {
+         headers: { Authorization: `Bearer ${this.apiKey}` },
+         body: JSON.stringify({ from: opts.from, to: opts.to }),
+       })
+       return mapToKsefnikFormat(await res.json())
+     }
+
+     async sendInvoice(input) { /* ... */ }
+     async getUpo(ref) { /* ... */ }
+   }
+   ```
+
+3. Użyj z ksefnik:
+   ```typescript
+   const ksefnik = createKsefnik({
+     config: { nip: '1234567890', environment: 'production' },
+     adapter: new KsefApiPlAdapter(process.env.KSEFAPI_KEY!),
+   })
+   ```
+
+4. Stopniowo migruj na natywny adapter KSeF (bez proxy przez ksefapi.pl).
+</Steps>
+
+## Z ręcznego Excela
+
+Ręczne uzgadnianie w Excelu to najczęstszy "konkurent". Typowy proces:
+
+1. Eksport faktur z KSeF (ręcznie, portal)
+2. Eksport wyciągu z banku (CSV)
+3. Porównywanie kolumn w Excelu (VLOOKUP, ręczne sprawdzanie)
+
+### Co zyskujesz z ksefnik
+
+| Ręczny Excel | Ksefnik |
+|-------------|---------|
+| Godziny pracy miesięcznie | Sekundy (automatyczny pipeline) |
+| Błędy ludzkie | 6 algorytmów dopasowania |
+| Brak walidacji | 20 reguł walidacji |
+| Brak historii | Storage (SQLite) z pełną historią |
+| Brak API | MCP dla AI, CLI dla automatyzacji |
+
+### Migracja
+
+<Steps>
+1. Zainstaluj ksefnik CLI:
+   ```bash
+   pnpm add -g @ksefnik/cli
+   ```
+
+2. Zaimportuj wyciąg bankowy:
+   ```bash
+   ksefnik bank-import ./wyciag-mbank.csv
+   ```
+
+3. Pobierz faktury z KSeF:
+   ```bash
+   ksefnik fetch --from 2025-01-01 --to 2025-03-31
+   ```
+
+4. Uruchom uzgadnianie:
+   ```bash
+   ksefnik reconcile
+   ```
+
+5. Przejrzyj wyniki — confidence, powody, niedopasowania.
+</Steps>
+
+## Z własnego rozwiązania
+
+Jeśli masz własny kod do komunikacji z KSeF, nie musisz go wyrzucać. Adapter pattern pozwala wrappować istniejącą logikę.
+
+<Tabs>
+  <TabItem label="Krok 1: Adapter">
+    ```typescript
+    import type { KsefAdapter } from '@ksefnik/shared'
+
+    // Twój istniejący klient
+    import { MyKsefClient } from './my-ksef-client'
+
+    class MyClientAdapter implements KsefAdapter {
+      private client = new MyKsefClient()
+
+      async fetchInvoices(opts) {
+        const invoices = await this.client.getAll(opts.from, opts.to)
+        return invoices.map((inv) => ({
+          id: crypto.randomUUID(),
+          invoiceNumber: inv.nr,
+          sellerNIP: inv.sprzedawca_nip,
+          grossAmount: Math.round(inv.brutto * 100), // PLN → grosze
+          currency: 'PLN' as const,
+          issueDate: inv.data_wystawienia,
+          createdAt: new Date().toISOString(),
+        }))
+      }
+
+      async sendInvoice(input) { /* ... */ }
+      async getUpo(ref) { /* ... */ }
+    }
+    ```
+  </TabItem>
+  <TabItem label="Krok 2: Użycie">
+    ```typescript
+    const ksefnik = createKsefnik({
+      config: { nip: '1234567890', environment: 'production' },
+      adapter: new MyClientAdapter(),
+    })
+
+    // Teraz masz pełen pipeline uzgadniania na swoich danych
+    const invoices = await ksefnik.invoices.fetch({
+      from: '2025-01-01',
+      to: '2025-03-31',
+    })
+
+    const bankContent = readFileSync('./wyciag.csv', 'utf-8')
+    const txs = await ksefnik.bank.importFromString(bankContent)
+
+    const report = await ksefnik.reconciliation.run(invoices, txs)
+    ```
+  </TabItem>
+  <TabItem label="Krok 3: Walidacja">
+    ```typescript
+    // Dodatkowy bonus: walidacja faktur
+    const validationReports = ksefnik.validation.validate(invoices)
+
+    const invalid = validationReports.filter((r) => !r.valid)
+    if (invalid.length > 0) {
+      console.log(`Znaleziono ${invalid.length} niepoprawnych faktur`)
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+<Aside type="tip">
+  Kluczowa konwersja przy migracji: kwoty z PLN (float) na grosze (integer). Użyj `Math.round(amount * 100)`.
+  Szczegóły w [Kwoty w groszach](/zaawansowane/kwoty-w-groszach/).
+</Aside>

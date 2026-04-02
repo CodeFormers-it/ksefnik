@@ -1,0 +1,80 @@
+---
+title: "Narzędzie: sync-invoices"
+description: Synchronizacja faktur z KSeF za podany okres.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Narzędzie `sync-invoices` pobiera faktury z Krajowego Systemu e-Faktur za wskazany zakres dat i zapisuje je w lokalnym kontekście do dalszego przetwarzania.
+
+## Parametry wejściowe
+
+| Parametr | Typ | Wymagany | Opis |
+|----------|-----|----------|------|
+| `dateFrom` | `string` | Tak | Data początkowa (YYYY-MM-DD) |
+| `dateTo` | `string` | Tak | Data końcowa (YYYY-MM-DD) |
+| `nip` | `string` | Nie | NIP podmiotu (domyślnie z konfiguracji) |
+
+## Format odpowiedzi
+
+```ts
+{
+  invoices: Invoice[]
+  count: number
+}
+```
+
+## Przykład wywołania
+
+```json
+{
+  "name": "sync-invoices",
+  "arguments": {
+    "dateFrom": "2026-03-01",
+    "dateTo": "2026-03-31"
+  }
+}
+```
+
+## Przykład odpowiedzi
+
+```json
+{
+  "invoices": [
+    {
+      "ksefReference": "KSeF-1234567890-20260310-ABC123",
+      "invoiceNumber": "FV/2026/03/001",
+      "sellerNip": "1234567890",
+      "buyerNip": "0987654321",
+      "netAmount": 100000,
+      "grossAmount": 123000,
+      "issueDate": "2026-03-10"
+    },
+    {
+      "ksefReference": "KSeF-1234567890-20260315-DEF456",
+      "invoiceNumber": "FV/2026/03/002",
+      "sellerNip": "1234567890",
+      "buyerNip": "5555555555",
+      "netAmount": 250000,
+      "grossAmount": 307500,
+      "issueDate": "2026-03-15"
+    }
+  ],
+  "count": 2
+}
+```
+
+## Kiedy używać
+
+- Na początku procesu uzgadniania -- pobierz faktury przed importem wyciągu
+- Gdy AI potrzebuje aktualnych danych z KSeF
+- Okresowa synchronizacja (np. "pobierz faktury z ostatniego miesiąca")
+
+<Aside type="tip">
+Kwoty są w groszach (100000 = 1000,00 PLN). AI powinien przeliczać je na złote w odpowiedziach dla użytkownika.
+</Aside>
+
+## Powiązane narzędzia
+
+- `query-invoices` -- wyszukiwanie wśród już zsynchronizowanych faktur
+- `reconcile` -- uzgodnienie pobranych faktur z przelewami

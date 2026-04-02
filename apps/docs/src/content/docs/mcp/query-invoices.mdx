@@ -1,0 +1,85 @@
+---
+title: "Narzędzie: query-invoices"
+description: Wyszukiwanie faktur po różnych kryteriach.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Narzędzie `query-invoices` przeszukuje zsynchronizowane faktury po NIP, zakresie dat lub numerze faktury.
+
+## Parametry wejściowe
+
+| Parametr | Typ | Wymagany | Opis |
+|----------|-----|----------|------|
+| `nip` | `string` | Nie | Filtruj po NIP sprzedawcy lub nabywcy |
+| `from` | `string` | Nie | Data początkowa (YYYY-MM-DD) |
+| `to` | `string` | Nie | Data końcowa (YYYY-MM-DD) |
+| `invoiceNumber` | `string` | Nie | Szukaj po numerze faktury (częściowe dopasowanie) |
+
+<Aside>
+Wszystkie parametry są opcjonalne, ale przynajmniej jeden powinien być podany. Bez filtrów narzędzie zwróci wszystkie zsynchronizowane faktury.
+</Aside>
+
+## Format odpowiedzi
+
+```ts
+{
+  invoices: Invoice[]
+  count: number
+}
+```
+
+## Przykład wywołania
+
+```json
+{
+  "name": "query-invoices",
+  "arguments": {
+    "nip": "0987654321",
+    "from": "2026-03-01",
+    "to": "2026-03-31"
+  }
+}
+```
+
+## Przykład odpowiedzi
+
+```json
+{
+  "invoices": [
+    {
+      "ksefReference": "KSeF-ABC-123",
+      "invoiceNumber": "FV/2026/03/001",
+      "sellerNip": "1234567890",
+      "buyerNip": "0987654321",
+      "netAmount": 100000,
+      "grossAmount": 123000,
+      "issueDate": "2026-03-10"
+    }
+  ],
+  "count": 1
+}
+```
+
+## Kiedy używać
+
+- Gdy użytkownik pyta o konkretną fakturę lub kontrahenta
+- Do weryfikacji szczegółów faktury przed potwierdzeniem dopasowania
+- Wyszukiwanie faktur po częściowym numerze ("pokaż faktury z marca")
+
+## Przykłady zapytań użytkownika
+
+| Zapytanie | Parametry |
+|-----------|-----------|
+| "Pokaż faktury od NIP 0987654321" | `nip: "0987654321"` |
+| "Ile faktur wystawiono w marcu?" | `from: "2026-03-01", to: "2026-03-31"` |
+| "Znajdź fakturę FV/2026/03/001" | `invoiceNumber: "FV/2026/03/001"` |
+
+<Aside type="tip">
+Parametr `invoiceNumber` obsługuje częściowe dopasowanie -- wpisanie "FV/2026/03" znajdzie wszystkie faktury z marca 2026.
+</Aside>
+
+## Powiązane narzędzia
+
+- `sync-invoices` -- najpierw zsynchronizuj faktury z KSeF
+- `reconcile` -- uzgodnij znalezione faktury z przelewami

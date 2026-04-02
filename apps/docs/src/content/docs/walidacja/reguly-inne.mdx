@@ -1,0 +1,172 @@
+---
+title: Pozostałe reguły
+description: Pozostałe reguły walidacji faktur w ksefnik.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Poza regułami [NIP](/walidacja/reguly-nip/), [kwot](/walidacja/reguly-kwot/) i [dat](/walidacja/reguly-dat/), ksefnik zawiera 7 dodatkowych reguł walidacji.
+
+## required-fields
+
+Sprawdza obecność wymaganych pól na fakturze.
+
+```typescript
+import { requiredFieldsRule } from '@ksefnik/core'
+```
+
+Wymagane pola: `invoiceNumber`, `sellerNIP`, `grossAmount`, `issueDate`.
+
+Każde pole jest sprawdzane osobno -- reguła zwraca osobny `ValidationResult` dla każdego brakującego pola:
+
+```typescript
+// Faktura bez numeru i NIP:
+// results: [
+//   { valid: false, rule: 'required-fields', field: 'invoiceNumber', message: 'Missing required field: invoiceNumber' },
+//   { valid: false, rule: 'required-fields', field: 'sellerNIP', message: 'Missing required field: sellerNIP' },
+//   { valid: true, rule: 'required-fields', field: 'grossAmount' },
+//   { valid: true, rule: 'required-fields', field: 'issueDate' },
+// ]
+```
+
+## invoice-number-format
+
+Sprawdza długość numeru faktury.
+
+```typescript
+import { invoiceNumberFormatRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `invoiceNumber` | 1-256 znaków |
+
+| Numer | Wynik |
+|-------|-------|
+| `FV/2026/03/001` | valid |
+| `1` | valid |
+| (pusty string) | invalid |
+| (257+ znaków) | invalid |
+
+## duplicate-check
+
+Sprawdza, czy w zbiorze faktur nie ma duplikatów (ta sama para `invoiceNumber` + `sellerNIP`).
+
+```typescript
+import { duplicateCheckRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `invoiceNumber` + `sellerNIP` | unikalna kombinacja w `context.allInvoices` |
+
+<Aside type="caution">
+  Reguła wymaga `context.allInvoices` do działania. Używaj `validateInvoices()` zamiast `validateInvoice()`, aby kontekst był tworzony automatycznie.
+</Aside>
+
+```typescript
+import { validateInvoices, duplicateCheckRule } from '@ksefnik/core'
+
+const invoices = [
+  { invoiceNumber: 'FV/001', sellerNIP: '5213456789', /* ... */ },
+  { invoiceNumber: 'FV/001', sellerNIP: '5213456789', /* ... */ }, // duplikat!
+]
+
+const reports = validateInvoices(invoices, [duplicateCheckRule])
+// reports[1].results[0].message: "Duplicate invoice: FV/001 from 5213456789"
+```
+
+## currency-valid
+
+Sprawdza, czy waluta faktury to PLN.
+
+```typescript
+import { currencyValidRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `currency` | `=== 'PLN'` |
+
+| Waluta | Wynik |
+|--------|-------|
+| `PLN` | valid |
+| `EUR` | invalid |
+| `USD` | invalid |
+
+<Aside type="note">
+  KSeF obsługuje wyłącznie faktury w PLN. Faktury walutowe wymagają przeliczenia na PLN przed wysyłką do KSeF.
+</Aside>
+
+## quantity-positive
+
+Sprawdza, czy ilość w pozycjach faktury jest dodatnia.
+
+```typescript
+import { quantityPositiveRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `lineItems[].quantity` | `> 0` (jeśli podane) |
+
+Reguła sprawdza każdą pozycję osobno i zwraca osobny wynik dla każdej:
+
+```typescript
+// lineItems: [{ quantity: 5, ... }, { quantity: 0, ... }]
+// results: [
+//   { valid: true, rule: 'quantity-positive', field: 'lineItems[1].quantity' },
+//   { valid: false, rule: 'quantity-positive', field: 'lineItems[2].quantity',
+//     message: 'Quantity must be positive: 0' },
+// ]
+```
+
+## description-length
+
+Sprawdza, czy opisy pozycji nie przekraczają 256 znaków.
+
+```typescript
+import { descriptionLengthRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `lineItems[].description` | `<= 256` znaków |
+
+## ksef-reference-format
+
+Sprawdza format referencji KSeF, jeśli jest podana.
+
+```typescript
+import { ksefReferenceFormatRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `ksefReference` | pasuje do `/^\d+-\d{8}-[A-Z0-9]+$/` (jeśli podane) |
+
+| Referencja | Wynik |
+|------------|-------|
+| `1234567890-20260301-ABCDEF123456` | valid |
+| `123-20260301-ABC` | valid |
+| `ABC-20260301-123` | invalid (cyfry na początku) |
+| (brak) | valid (pomijane) |
+
+<Aside type="note">
+  Format referencji KSeF: `[cyfry]-[data 8 cyfr]-[alfanumeryczny]`. Np. `1234567890-20260301-ABCDEF123456789ABCDEF12345678`.
+</Aside>
+
+## Użycie wszystkich reguł
+
+```typescript
+import { validateInvoices, allRules } from '@ksefnik/core'
+
+const reports = validateInvoices(invoices, allRules)
+
+for (const report of reports) {
+  const errors = report.results.filter(r => !r.valid)
+  if (errors.length > 0) {
+    console.log(`${report.invoice.invoiceNumber}: ${errors.map(e => e.rule).join(', ')}`)
+  }
+}
+```

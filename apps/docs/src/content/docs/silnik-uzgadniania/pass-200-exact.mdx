@@ -1,0 +1,124 @@
+---
+title: "Pass 200: exact"
+description: Dokladne dopasowanie po kwocie i NIP -- drugi pass w pipeline.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components'
+
+## Parametry
+
+| Pole | Wartosc |
+|------|---------|
+| **name** | `exact` |
+| **order** | `200` |
+| **confidence** | `95%` |
+
+## Strategia
+
+Pass wymaga spelnienia **dwoch warunkow jednoczesnie**:
+
+1. `|transaction.amount| === invoice.grossAmount` -- dokladne dopasowanie kwoty (w groszach)
+2. NIP z transakcji === `invoice.sellerNIP` -- dopasowanie kontrahenta
+
+## Ekstrakcja NIP
+
+NIP transakcji jest pobierany w nastepujacej kolejnosci:
+
+<Steps>
+1. `tx.senderNIP` -- NIP nadawcy (jesli parser bankowy go wyekstrahowal)
+2. `tx.recipientNIP` -- NIP odbiorcy
+3. `extractFirstNIP(tx.description)` -- ekstrakcja z tytulu przelewu
+</Steps>
+
+Funkcja `extractFirstNIP()` rozpoznaje formaty:
+- MPP: `/NIP/5213456784/`
+- IDC: `/IDC/5213456784/`
+- Prefix: `NIP: 5213456784`, `NIP5213456784`
+- Surowy 10-cyfrowy numer z poprawna suma kontrolna
+
+## Kod zrodlowy
+
+```ts
+const exactPass: ReconciliationPass = {
+  name: 'exact',
+  order: 200,
+
+  async run(context: MatchingContext): Promise<MatchResult[]> {
+    const results: MatchResult[] = []
+    const usedTxIds = new Set<string>()
+
+    for (const invoice of context.invoices) {
+      for (const tx of context.transactions) {
+        if (usedTxIds.has(tx.id)) continue
+
+        const txAmount = Math.abs(tx.amount)
+        if (txAmount !== invoice.grossAmount) continue
+
+        const nip = tx.senderNIP ?? tx.recipientNIP ?? extractFirstNIP(tx.description)
+        if (!nip || nip !== invoice.sellerNIP) continue
+
+        results.push({
+          invoiceId: invoice.id,
+          transactionId: tx.id,
+          confidence: 95,
+          reasons: [
+            `Exact amount match: ${txAmount} grosze`,
+            `NIP match: ${nip}`,
+          ],
+        })
+        usedTxIds.add(tx.id)
+        break
+      }
+    }
+
+    return results
+  },
+}
+```
+
+## Przyklad
+
+```ts
+const invoices = [
+  {
+    id: 'inv-001',
+    invoiceNumber: 'FV/2026/03/042',
+    sellerNIP: '5213456784',
+    grossAmount: 123000, // 1 230,00 PLN
+    currency: 'PLN',
+    issueDate: '2026-03-10',
+    sellerName: 'TechSolutions Sp. z o.o.',
+  },
+]
+
+const transactions = [
+  {
+    id: 'tx-001',
+    date: '2026-03-18',
+    amount: -123000, // ujemna = przelew wychodzacy
+    currency: 'PLN',
+    description: 'Przelew do TechSolutions /NIP/5213456784/ za uslugi IT',
+    senderName: 'Moja Firma Sp. z o.o.',
+  },
+]
+
+const report = await runPipeline(invoices, transactions, [exactPass])
+// report.matched[0].confidence === 95
+// report.matched[0].reasons:
+//   "Exact amount match: 123000 grosze"
+//   "NIP match: 5213456784"
+```
+
+## Edge cases
+
+<Aside type="caution">
+  **Ten sam NIP, inna kwota** -- nie dopasuje. Pass wymaga dokladnego dopasowania kwoty co do grosza.
+</Aside>
+
+<Aside type="note">
+  **Dwie faktury na te sama kwote od tego samego kontrahenta** -- pass dopasuje pierwsza znaleziona pare. Druga faktura przejdzie do kolejnych passow, ktore moga ja dopasowac na podstawie numeru faktury lub daty.
+</Aside>
+
+## Dlaczego 95%?
+
+Kwota + NIP to silna kombinacja, ale nie unikatowa. Ten sam kontrahent moze wystawic dwie faktury na identyczna kwote w krotkim czasie. W takiej sytuacji pass dopasuje poprawnie jedna, ale druga moze przypisac do niewlasciwej transakcji. Stad 95%, nie 99%.

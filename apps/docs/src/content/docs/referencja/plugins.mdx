@@ -1,0 +1,174 @@
+---
+title: "Namespace: plugins"
+description: Dokumentacja namespace plugins — rejestracja, ładowanie i listowanie pluginów.
+---
+
+import { Tabs, TabItem, Aside, Steps } from '@astrojs/starlight/components'
+
+Namespace `plugins` zarządza systemem pluginów ksefnik. Pluginy mogą dodawać passy uzgadniania, narzędzia MCP, komendy CLI i hooki na zdarzenia.
+
+## register()
+
+Rejestruje plugin w `PluginRegistry`. Passy uzgadniania z pluginu są natychmiast dodawane do pipeline.
+
+```typescript
+register(plugin: KsefPlugin): void
+```
+
+### Przykład
+
+```typescript
+import type { KsefPlugin } from '@ksefnik/shared'
+
+const myPlugin: KsefPlugin = {
+  name: 'my-custom-plugin',
+  version: '1.0.0',
+  reconciliationPasses() {
+    return [
+      {
+        name: 'custom-bank-account-match',
+        order: 650,
+        async run(context) {
+          // Dopasowanie po numerze konta bankowego
+          return matches
+        },
+      },
+    ]
+  },
+}
+
+ksefnik.plugins.register(myPlugin)
+```
+
+## load()
+
+Dynamicznie importuje pakiet npm i rejestruje go jako plugin. Jeśli pakiet nie istnieje, zwraca `null` (bez rzucania błędu).
+
+```typescript
+async load(name: string): Promise<KsefPlugin | null>
+```
+
+<Aside type="tip">
+  To jest serce wzorca **plugin by absence**: brak pakietu = brak feature, nigdy błąd.
+  Szczegóły w sekcji [Plugin by absence](/zaawansowane/plugin-by-absence/).
+</Aside>
+
+### Przykład
+
+```typescript
+// Spróbuj załadować pro plugin — jeśli nie ma pakietu, zwróci null
+const proPlugin = await ksefnik.plugins.load('@ksefnik/pro-reconciliation')
+
+if (proPlugin) {
+  console.log(`Załadowano: ${proPlugin.name} v${proPlugin.version}`)
+} else {
+  console.log('Pro plugin niedostępny — używam wersji darmowej')
+}
+```
+
+### Ładowanie wielu pluginów
+
+```typescript
+const pluginNames = [
+  '@ksefnik/pro-reconciliation',
+  '@ksefnik/pro-analytics',
+  '@ksefnik/pro-compliance',
+]
+
+for (const name of pluginNames) {
+  const plugin = await ksefnik.plugins.load(name)
+  if (plugin) {
+    console.log(`  + ${plugin.name} v${plugin.version}`)
+  }
+}
+```
+
+## list()
+
+Zwraca listę wszystkich zarejestrowanych pluginów.
+
+```typescript
+list(): KsefPlugin[]
+```
+
+### Przykład
+
+```typescript
+const plugins = ksefnik.plugins.list()
+
+console.log(`Zainstalowane pluginy (${plugins.length}):`)
+for (const plugin of plugins) {
+  console.log(`  ${plugin.name} v${plugin.version}`)
+}
+```
+
+## PluginRegistry — wewnętrzne działanie
+
+`PluginRegistry` łączy passy uzgadniania z core (order 100-500) z passami z pluginów (order 600+). Metoda `getPasses()` zwraca wszystkie passy posortowane po `order`.
+
+```typescript
+// Wewnętrznie w PluginRegistry:
+getPasses(): ReconciliationPass[] {
+  return [...corePasses, ...pluginPasses].sort((a, b) => a.order - b.order)
+}
+```
+
+## KsefPlugin — pełny interfejs
+
+```typescript
+interface KsefPlugin {
+  name: string
+  version: string
+  reconciliationPasses?(): ReconciliationPass[]
+  onReconciliationComplete?(report: ReconciliationReport): Promise<void>
+  onInvoicesSynced?(invoices: Invoice[]): Promise<void>
+  mcpTools?(): McpToolDefinition[]
+  cliCommands?(): CliCommand[]
+}
+```
+
+Wszystkie metody poza `name` i `version` są opcjonalne. Plugin może implementować dowolny podzbiór.
+
+## Przykład kompletnego pluginu
+
+```typescript
+import type { KsefPlugin, ReconciliationPass } from '@ksefnik/shared'
+
+const analyticsPlugin: KsefPlugin = {
+  name: '@ksefnik/pro-analytics',
+  version: '1.0.0',
+
+  reconciliationPasses() {
+    return [
+      {
+        name: 'payment-pattern-analysis',
+        order: 650,
+        async run(context) {
+          // Analiza wzorców płatności kontrahentów
+          return []
+        },
+      },
+    ]
+  },
+
+  async onReconciliationComplete(report) {
+    // Zapisz statystyki do zewnętrznego systemu
+    console.log(`Raport ${report.id}: ${report.summary.matchedCount} dopasowań`)
+  },
+
+  mcpTools() {
+    return [
+      {
+        name: 'analytics-summary',
+        description: 'Podsumowanie analityczne uzgadniania',
+        inputSchema: { type: 'object', properties: {} },
+        async handler() {
+          return { status: 'ok' }
+        },
+      },
+    ]
+  },
+}
+
+export default analyticsPlugin
+```

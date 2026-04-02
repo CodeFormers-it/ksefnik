@@ -1,0 +1,261 @@
+---
+title: System pluginów
+description: Jak działa system pluginów w ksefnik i jak go rozszerzać.
+---
+
+import { Tabs, TabItem, Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components';
+
+Ksefnik ma modularną architekturę opartą na pluginach. Core zawiera 6 passów reconciliation (order 100-500), a pluginy dodają kolejne (order 600+). Architektura "plugin by absence" oznacza, że brak pakietu = darmowa wersja, bez żadnego DRM.
+
+## Architektura "plugin by absence"
+
+Ksefnik nie sprawdza licencji, nie dzwoni do żadnego serwera, nie blokuje funkcji. Zamiast tego:
+
+```typescript
+// Wewnątrz ksefnik — ładowanie pluginu
+try {
+  const proPlugin = await import('@ksefnik/pro-reconciliation');
+  registry.register(proPlugin.default);
+} catch {
+  // Pakiet nie zainstalowany — brak dodatkowych passów
+  // Działa darmowa wersja z 6 core passami
+}
+```
+
+<Aside type="tip">
+  Zero DRM oznacza zero ryzyka. Ksefnik nigdy nie przestanie działać z powodu wygasłej licencji czy braku internetu. Pluginy to po prostu dodatkowe pakiety npm.
+</Aside>
+
+## Interfejs KsefPlugin
+
+Każdy plugin implementuje interfejs `KsefPlugin`:
+
+```typescript
+interface KsefPlugin {
+  /** Unikalna nazwa pluginu */
+  name: string;
+
+  /** Wersja pluginu (semver) */
+  version: string;
+
+  /** Dodatkowe passy reconciliation */
+  reconciliationPasses?(): ReconciliationPass[];
+
+  /** Hook wywoływany po zakończeniu reconciliation */
+  onReconciliationComplete?(report: ReconciliationReport): Promise<void>;
+
+  /** Dodatkowe narzędzia MCP */
+  mcpTools?(): McpTool[];
+
+  /** Dodatkowe komendy CLI */
+  cliCommands?(): CliCommand[];
+}
+```
+
+## Interfejs ReconciliationPass
+
+Każdy pass reconciliation implementuje:
+
+```typescript
+interface ReconciliationPass {
+  /** Unikalna nazwa passa */
+  name: string;
+
+  /** Kolejność wykonania (core: 100-500, pluginy: 600+) */
+  order: number;
+
+  /** Wykonaj dopasowanie */
+  execute(
+    unmatchedInvoices: Invoice[],
+    unmatchedTransactions: BankTransaction[],
+  ): Promise<Match[]>;
+}
+```
+
+## Rejestracja pluginów
+
+### Ręczna rejestracja
+
+```typescript
+import { createKsefnik } from '@ksefnik/core';
+import { ecommercePlugin } from './my-ecommerce-plugin';
+
+const ksef = createKsefnik({
+  config: { nip: '5213456784' },
+});
+
+ksef.plugins.register(ecommercePlugin);
+```
+
+### Ładowanie z pakietu npm
+
+```typescript
+const ksef = createKsefnik({
+  config: { nip: '5213456784' },
+});
+
+// Załaduj plugin z pakietu npm — jeśli nie jest zainstalowany, loguje warning
+await ksef.plugins.load('@ksefnik/pro-reconciliation');
+```
+
+## PluginRegistry — kolejność passów
+
+Registry scala passy z core i pluginów, sortując je po `order`:
+
+| Źródło | Pass | Order |
+|--------|------|-------|
+| Core | `ksefRef` | 100 |
+| Core | `exactNip` | 200 |
+| Core | `invoiceRef` | 300 |
+| Core | `fuzzy` | 400 |
+| Core | `partial` | 450 |
+| Core | `proximity` | 500 |
+| Plugin | `ecommerceOrderId` | 600 |
+| Plugin | `recurringPayment` | 650 |
+| Plugin | `multiCurrency` | 700 |
+
+```typescript
+// Sprawdź zarejestrowane passy
+const passes = ksef.reconciliation.getPasses();
+for (const pass of passes) {
+  console.log(`${pass.name} (order: ${pass.order})`);
+}
+```
+
+<Aside type="note">
+  Passy z niższym orderem wykonują się jako pierwsze. Faktura dopasowana przez wcześniejszy pass nie trafia do kolejnych — dlatego core passes (pewne strategie) mają niskie ordery, a plugin passes (specjalistyczne) wyższe.
+</Aside>
+
+## Tworzenie własnego pluginu
+
+### Minimalny plugin z jednym passem
+
+```typescript
+import type { KsefPlugin, ReconciliationPass, Match } from '@ksefnik/core';
+
+/** Pass dopasowujący po numerze zamówienia e-commerce w tytule przelewu */
+const ecommerceOrderPass: ReconciliationPass = {
+  name: 'ecommerceOrderId',
+  order: 600,
+
+  async execute(invoices, transactions): Promise<Match[]> {
+    const matches: Match[] = [];
+
+    for (const inv of invoices) {
+      // Szukaj numeru zamówienia w metadanych faktury
+      const orderId = inv.metadata?.orderId;
+      if (!orderId) continue;
+
+      const tx = transactions.find(t =>
+        t.title.includes(orderId)
+      );
+
+      if (tx && Math.abs(tx.amount) === inv.grossAmount) {
+        matches.push({
+          invoice: inv,
+          transaction: tx,
+          pass: 'ecommerceOrderId',
+          confidence: 0.92,
+        });
+      }
+    }
+
+    return matches;
+  },
+};
+
+export const ecommercePlugin: KsefPlugin = {
+  name: 'ecommerce-reconciliation',
+  version: '1.0.0',
+
+  reconciliationPasses() {
+    return [ecommerceOrderPass];
+  },
+
+  async onReconciliationComplete(report) {
+    const ecommerceMatches = report.matched.filter(
+      m => m.pass === 'ecommerceOrderId'
+    );
+    console.log(
+      `E-commerce plugin dopasował ${ecommerceMatches.length} faktur po numerze zamówienia`
+    );
+  },
+};
+```
+
+### Rejestracja i użycie
+
+```typescript
+import { createKsefnik } from '@ksefnik/core';
+import { ecommercePlugin } from './ecommerce-plugin';
+
+const ksef = createKsefnik({
+  config: { nip: '8971234561' },
+});
+
+ksef.plugins.register(ecommercePlugin);
+
+const invoices = await ksef.invoices.fetch({
+  from: '2026-03-01',
+  to: '2026-03-31',
+});
+const transactions = await ksef.bank.importStatement('./wyciag.csv');
+
+const report = await ksef.reconciliation.run(invoices, transactions);
+
+// passBreakdown zawiera też passy z pluginów
+for (const pb of report.passBreakdown) {
+  console.log(`${pb.pass}: ${pb.matchCount} dopasowań`);
+}
+```
+
+## Plugin z narzędziami MCP i komendami CLI
+
+```typescript
+export const advancedPlugin: KsefPlugin = {
+  name: 'advanced-analytics',
+  version: '2.0.0',
+
+  mcpTools() {
+    return [
+      {
+        name: 'analyze_trends',
+        description: 'Analiza trendów dopasowań w czasie',
+        parameters: {
+          months: { type: 'number', description: 'Liczba miesięcy do analizy' },
+        },
+        handler: async (params) => {
+          // logika analizy trendów
+          return { trend: 'improving', matchRateChange: '+5%' };
+        },
+      },
+    ];
+  },
+
+  cliCommands() {
+    return [
+      {
+        name: 'trends',
+        description: 'Pokaż trendy dopasowań',
+        handler: async (args) => {
+          // logika komendy CLI
+        },
+      },
+    ];
+  },
+};
+```
+
+## Przykład: firma tworzy plugin dla e-commerce
+
+<Steps>
+  1. Firma sprzedaje online i klienci podają numer zamówienia w tytule przelewu (np. `Zamówienie #ORD-2026-1234`).
+  2. Core passes nie dopasowują tych przelewów, bo tytuł nie zawiera NIP ani numeru faktury.
+  3. Firma tworzy plugin z passem `ecommerceOrderId` (order 600), który szuka numerów zamówień.
+  4. Po zainstalowaniu pluginu match rate rośnie z 72% do 91%.
+  5. Plugin działa obok core passes — nie zastępuje ich, tylko uzupełnia pipeline.
+</Steps>
+
+<Aside type="caution">
+  Unikaj orderów poniżej 600 w pluginach — mogą kolidować z przyszłymi passami core. Zakres 600-999 jest zarezerwowany dla pluginów.
+</Aside>

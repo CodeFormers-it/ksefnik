@@ -1,0 +1,92 @@
+---
+title: "Narzędzie: reconcile"
+description: Uzgadnianie faktur KSeF z transakcjami bankowymi.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Narzędzie `reconcile` uruchamia silnik uzgadniania, który dopasowuje zsynchronizowane faktury KSeF do zaimportowanych transakcji bankowych.
+
+## Parametry wejściowe
+
+Brak. Narzędzie operuje na danych już załadowanych do kontekstu przez `sync-invoices` i `import-bank`.
+
+<Aside type="caution">
+Przed wywołaniem `reconcile` musisz wykonać `sync-invoices` i `import-bank`. Bez danych w kontekście narzędzie zwróci pusty raport.
+</Aside>
+
+## Format odpowiedzi
+
+```ts
+{
+  summary: {
+    matched: number
+    unmatchedInvoices: number
+    unmatchedTransactions: number
+    averageConfidence: number
+  }
+  matches: Match[]
+  unmatchedInvoices: Invoice[]
+  unmatchedTransactions: BankTransaction[]
+  reportId: string
+}
+```
+
+## Przykład wywołania
+
+```json
+{
+  "name": "reconcile",
+  "arguments": {}
+}
+```
+
+## Przykład odpowiedzi
+
+```json
+{
+  "summary": {
+    "matched": 10,
+    "unmatchedInvoices": 2,
+    "unmatchedTransactions": 37,
+    "averageConfidence": 0.92
+  },
+  "matches": [
+    {
+      "matchId": "m-001",
+      "invoice": {
+        "ksefReference": "KSeF-ABC-123",
+        "invoiceNumber": "FV/2026/03/001",
+        "grossAmount": 123000
+      },
+      "transaction": {
+        "date": "2026-03-05",
+        "amount": -123000,
+        "description": "FV/2026/03/001 NIP 1234567890"
+      },
+      "confidence": 1.0,
+      "passName": "exact-nip-amount"
+    }
+  ],
+  "unmatchedInvoices": [],
+  "unmatchedTransactions": [],
+  "reportId": "rpt-20260401-abc123"
+}
+```
+
+## Kiedy używać
+
+- Po zsynchronizowaniu faktur i zaimportowaniu wyciągu
+- Gdy użytkownik prosi "uzgodnij faktury z przelewami"
+- Jako krok w procesie miesięcznego zamknięcia
+
+<Aside type="tip">
+Pole `reportId` potrzebne jest do wywołania `get-unmatched` i `confirm-match`. Zachowaj je do dalszego przetwarzania.
+</Aside>
+
+## Powiązane narzędzia
+
+- `get-unmatched` -- pobierz szczegóły nieuzgodnionych pozycji
+- `confirm-match` -- potwierdź lub odrzuć dopasowanie
+- `sync-invoices` -- pobierz faktury (wymagane przed reconcile)
+- `import-bank` -- zaimportuj wyciąg (wymagane przed reconcile)

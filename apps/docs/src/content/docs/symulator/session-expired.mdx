@@ -1,0 +1,87 @@
+---
+title: "Scenariusz: session-expired"
+description: Symulacja wygaśnięcia sesji KSeF po pierwszym zapytaniu.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Scenariusz `session-expired` symuluje wygaśnięcie sesji KSeF. Pierwsze zapytanie kończy się sukcesem, ale kolejne zwracają `KsefSessionError`. Pozwala to testować mechanizm automatycznego odnawiania sesji.
+
+## Zachowanie
+
+| Zapytanie | Rezultat |
+|-----------|----------|
+| Pierwsze (fetch/send) | Sukces |
+| Drugie i kolejne | `KsefSessionError` |
+
+## Hooks
+
+Scenariusz rejestruje hooki `beforeFetch` i `beforeSend` z wewnętrznym licznikiem `requestCount`. Pierwszy request przechodzi bez zmian, każdy kolejny rzuca `KsefSessionError`.
+
+## Stan wewnętrzny
+
+```ts
+// Uproszczony mechanizm scenariusza
+let requestCount = 0
+
+const hooks = {
+  beforeFetch: () => {
+    requestCount++
+    if (requestCount > 1) {
+      throw new KsefSessionError('Session expired')
+    }
+  },
+  beforeSend: () => {
+    requestCount++
+    if (requestCount > 1) {
+      throw new KsefSessionError('Session expired')
+    }
+  },
+}
+```
+
+## Kiedy używać
+
+- Testowanie `SessionManager` i automatycznego odnawiania sesji
+- Weryfikacja, że aplikacja poprawnie reaguje na wygaśnięcie sesji
+- Testowanie retry z ponownym uwierzytelnieniem
+
+## Przykład
+
+```ts
+import { createKsefSimulator } from '@ksefnik/simulator'
+import { createKsefnik } from '@ksefnik/core'
+import { KsefSessionError } from '@ksefnik/shared'
+
+const { adapter } = createKsefSimulator({
+  scenario: 'session-expired',
+})
+
+const ksefnik = createKsefnik({
+  nip: '1234567890',
+  adapter,
+})
+
+// Pierwsze zapytanie -- OK
+const first = await ksefnik.invoices.sync({
+  dateFrom: '2026-03-01',
+  dateTo: '2026-03-31',
+})
+console.log(first.count) // np. 5
+
+// Drugie zapytanie -- błąd sesji
+try {
+  await ksefnik.invoices.sync({
+    dateFrom: '2026-03-01',
+    dateTo: '2026-03-31',
+  })
+} catch (error) {
+  if (error instanceof KsefSessionError) {
+    console.log(error.message) // "Session expired"
+  }
+}
+```
+
+<Aside type="tip">
+Scenariusz liczy wszystkie zapytania łącznie (fetch + send). Jeśli potrzebujesz osobnych liczników per operację, stwórz własny scenariusz.
+</Aside>

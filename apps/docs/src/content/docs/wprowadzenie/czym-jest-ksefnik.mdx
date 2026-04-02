@@ -1,0 +1,99 @@
+---
+title: Czym jest ksefnik
+description: Wprowadzenie do ksefnik — TypeScript SDK do uzgadniania faktur KSeF z przelewami bankowymi
+---
+
+import { Card, CardGrid, LinkCard, Aside } from '@astrojs/starlight/components'
+
+## Problem
+
+Od 2026 roku Krajowy System e-Faktur (KSeF) jest obowiązkowy dla wszystkich podatników VAT w Polsce. Firmy otrzymują i wysyłają setki faktur miesięcznie przez KSeF — ale nadal muszą **ręcznie porównywać je z przelewami bankowymi**.
+
+To oznacza:
+
+- Godziny pracy księgowych na uzgadnianie faktur z wyciągami
+- Ryzyko pomyłek przy ręcznym dopasowywaniu
+- Brak narzędzi developer-friendly do automatyzacji tego procesu
+- Istniejące rozwiązania to zamknięte systemy ERP, nie biblioteki
+
+## Rozwiązanie
+
+**ksefnik** automatycznie dopasowuje faktury KSeF do przelewów bankowych w 6 krokach, od najwyższej do najniższej pewności:
+
+| Pass | Nazwa | Confidence | Opis |
+|------|-------|-----------|------|
+| 100 | `ksef-ref` | 99% | Numer KSeF w tytule przelewu |
+| 200 | `exact` | 95% | Dokładny NIP + kwota |
+| 300 | `invoice-ref` | 90% | Numer faktury w tytule przelewu |
+| 400 | `fuzzy` | 70-85% | Rozmyte dopasowanie nazwy kontrahenta |
+| 450 | `partial` | 60-75% | Częściowe dopasowanie kwoty (zaliczki, raty) |
+| 500 | `proximity` | 50-65% | Bliskość dat i podobieństwo kwot |
+
+Każdy pass próbuje dopasować tylko te faktury i transakcje, które nie zostały jeszcze sparowane. Wynik to raport z confidence score dla każdego dopasowania.
+
+## Architektura SDK-first
+
+Cała logika biznesowa mieszka w `@ksefnik/core`. CLI, serwer MCP i hosted API to **cienkie wrappery**, które delegują do SDK:
+
+```
+                    ┌─────────────┐
+                    │  @ksefnik/  │
+                    │    cli      │
+                    └──────┬──────┘
+                           │
+┌─────────────┐    ┌──────┴──────┐    ┌─────────────┐
+│  @ksefnik/  │    │  @ksefnik/  │    │  ksefnik-   │
+│    mcp      ├────┤    core     ├────┤    pro      │
+└─────────────┘    └──────┬──────┘    └─────────────┘
+                           │
+                    ┌──────┴──────┐
+                    │  @ksefnik/  │
+                    │  simulator  │
+                    └─────────────┘
+```
+
+Dzięki temu możesz użyć ksefnik jako:
+- **Biblioteki** w swoim projekcie TypeScript/Node.js
+- **CLI** do jednorazowych operacji lub skryptów
+- **Serwera MCP** do integracji z asystentami AI
+- **API** (ksefnik-pro) do integracji z własnymi systemami
+
+## Pakiety
+
+| Pakiet | Nazwa npm | Opis |
+|--------|-----------|------|
+| `@ksefnik/shared` | Schematy Zod, typy, interfejs pluginów | Wspólne definicje dla całego ekosystemu |
+| `@ksefnik/core` | SDK facade, silnik, parsery | Cała logika biznesowa — jedyny pakiet, który musisz zainstalować |
+| `@ksefnik/simulator` | Offline mock KSeF | Symuluje API KSeF w testach i developmencie |
+| `@ksefnik/mcp` | Serwer MCP | 8 narzędzi AI do uzgadniania i walidacji |
+| `@ksefnik/cli` | CLI + binarka | Interfejs konsolowy, kompilowany do standalone binarki |
+
+## Dla kogo
+
+<CardGrid>
+  <Card title="Developerzy" icon="laptop">
+    Integrujesz KSeF w swoim produkcie? ksefnik daje Ci gotowy silnik uzgadniania, parsery bankowe i walidację — jako bibliotekę TypeScript z typami.
+  </Card>
+  <Card title="Biura rachunkowe" icon="document">
+    Obsługujesz dziesiątki firm? CLI i serwer MCP pozwalają zautomatyzować uzgadnianie faktur z przelewami bez pisania kodu.
+  </Card>
+  <Card title="Firmy SaaS" icon="rocket">
+    Budujesz produkt na KSeF? ksefnik to gotowy fundament — silnik, parsery, walidacja. Skup się na swojej wartości dodanej.
+  </Card>
+</CardGrid>
+
+## Licencja i model
+
+- **MIT** — open-source, darmowy do użytku komercyjnego
+- **Zero DRM** — brak walidacji licencji w runtime, brak phone-home
+- **Plugin by absence** — pro features ładowane dynamicznie przez `try { await import() }`. Brak pluginu = darmowa wersja, bez błędów
+
+<Aside type="tip">
+  ksefnik-pro to oddzielny, prywatny pakiet z dodatkowymi passami uzgadniania, zaawansowaną walidacją i wsparciem. Darmowa wersja jest w pełni funkcjonalna — pro dodaje optymalizacje i edge case'y.
+</Aside>
+
+<LinkCard
+  title="Szybki start"
+  description="Od zera do pierwszego uzgadniania w 5 minut."
+  href="/wprowadzenie/szybki-start/"
+/>

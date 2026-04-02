@@ -1,0 +1,71 @@
+---
+title: "Komenda: send"
+description: Wysyłanie faktur XML do KSeF.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Komenda `send` wysyła fakturę w formacie XML do Krajowego Systemu e-Faktur i zwraca numer referencyjny KSeF.
+
+## Użycie
+
+```bash
+ksefnik send <sciezka-do-pliku> [--format json|text]
+```
+
+## Parametry
+
+| Parametr | Wymagany | Opis |
+|----------|----------|------|
+| `<sciezka-do-pliku>` | Tak | Ścieżka do pliku XML z fakturą |
+| `--format` | Nie | Format wyjścia: `json` lub `text` (domyślnie) |
+
+## Wymagania
+
+- Plik XML zgodny ze schematem FA(2) KSeF
+- Skonfigurowany token autoryzacyjny (`--token` lub `KSEFNIK_TOKEN`)
+- NIP podmiotu (`--nip` lub `KSEFNIK_NIP`)
+
+## Przykłady
+
+```bash
+# Wyślij fakturę
+ksefnik send ./faktury/FV-2026-03-001.xml
+
+# Wynik (format text):
+# Faktura wysłana pomyślnie
+# Referencja KSeF: KSeF-1234567890-20260315-ABC123DEF456
+# Timestamp: 2026-03-15T10:30:00Z
+```
+
+```bash
+# Wynik jako JSON
+ksefnik send ./faktury/FV-2026-03-001.xml --format json
+```
+
+```json
+{
+  "ksefReference": "KSeF-1234567890-20260315-ABC123DEF456",
+  "timestamp": "2026-03-15T10:30:00Z"
+}
+```
+
+## Obsługa błędów
+
+Jeśli plik XML zawiera błędy lub KSeF odrzuci fakturę, CLI wyświetli komunikat błędu:
+
+```bash
+ksefnik send ./faktura-bledna.xml
+
+# Błąd: KSeF odrzucił fakturę (400)
+# Kod: INVALID_NIP
+# Szczegóły: NIP 0000000000 is not valid
+```
+
+<Aside type="tip">
+Przed wysyłką warto zwalidować fakturę lokalnie komendą `ksefnik validate`, aby uniknąć odrzucenia przez KSeF.
+</Aside>
+
+<Aside>
+Po wysłaniu możesz sprawdzić status UPO, pobierając fakturę po referencji KSeF za pomocą `ksefnik fetch`.
+</Aside>

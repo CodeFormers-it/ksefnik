@@ -1,0 +1,75 @@
+---
+title: "Narzędzie: import-bank"
+description: Import wyciągu bankowego do kontekstu MCP.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Narzędzie `import-bank` parsuje treść wyciągu bankowego (CSV lub MT940) i zapisuje transakcje w kontekście do dalszego przetwarzania.
+
+## Parametry wejściowe
+
+| Parametr | Typ | Wymagany | Opis |
+|----------|-----|----------|------|
+| `content` | `string` | Tak | Treść pliku wyciągu bankowego |
+
+<Aside>
+Parametr `content` przyjmuje pełną treść pliku, nie ścieżkę. AI powinien wczytać plik i przekazać jego zawartość.
+</Aside>
+
+## Format odpowiedzi
+
+```ts
+{
+  transactions: BankTransaction[]
+  count: number
+}
+```
+
+## Przykład wywołania
+
+```json
+{
+  "name": "import-bank",
+  "arguments": {
+    "content": "#Data operacji;#Opis operacji;#Rachunek;#Kwota;#Saldo po operacji;\n2026-03-01;Przelew do ACME Sp. z o.o. NIP 5555555555;PL123456789;-1230.00;48770.00\n2026-03-02;Wpłata od Kontrahent S.A.;PL123456789;5000.00;53770.00"
+  }
+}
+```
+
+## Przykład odpowiedzi
+
+```json
+{
+  "transactions": [
+    {
+      "date": "2026-03-01",
+      "amount": -123000,
+      "description": "Przelew do ACME Sp. z o.o. NIP 5555555555",
+      "bank": "mbank"
+    },
+    {
+      "date": "2026-03-02",
+      "amount": 500000,
+      "description": "Wpłata od Kontrahent S.A.",
+      "bank": "mbank"
+    }
+  ],
+  "count": 2
+}
+```
+
+## Kiedy używać
+
+- Po zsynchronizowaniu faktur (`sync-invoices`) -- zaimportuj wyciąg przed uzgodnieniem
+- Gdy użytkownik prosi o analizę wyciągu bankowego
+- Przed wywołaniem `reconcile`
+
+<Aside type="tip">
+Format banku jest wykrywany automatycznie na podstawie struktury nagłówków. Obsługiwane formaty: mBank CSV, ING CSV, PKO BP CSV, Santander CSV, MT940.
+</Aside>
+
+## Powiązane narzędzia
+
+- `sync-invoices` -- pobierz faktury przed importem wyciągu
+- `reconcile` -- uzgodnij faktury z zaimportowanymi transakcjami

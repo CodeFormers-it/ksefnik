@@ -1,0 +1,131 @@
+---
+title: "Pass 400: fuzzy"
+description: Rozmyte dopasowanie nazwy kontrahenta z dokladna kwota.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+## Parametry
+
+| Pole | Wartosc |
+|------|---------|
+| **name** | `fuzzy` |
+| **order** | `400` |
+| **confidence** | `80%` |
+
+## Strategia
+
+Pass laczy dwa kryteria:
+
+1. **Rozmyte dopasowanie nazwy**: `fuzzball.ratio(invoice.sellerName, tx.senderName) >= 80`
+2. **Dokladna kwota**: `|tx.amount| === invoice.grossAmount`
+
+Oba warunki musza byc spelnione jednoczesnie.
+
+## Biblioteka fuzzball
+
+[fuzzball](https://github.com/nol13/fuzzball) implementuje algorytm oparty na odleglosci Levenshteina. Funkcja `ratio()` zwraca wynik 0-100, gdzie 100 oznacza identyczne ciagi.
+
+```ts
+import { ratio } from 'fuzzball'
+
+ratio('TECHSOLUTIONS SP Z OO', 'TECHSOLUTIONS SP. Z O.O.')  // 85
+ratio('FIRMA ABC',             'FIRMA ABC SP Z OO')          // 67
+ratio('JAN KOWALSKI',          'KOWALSKI JAN')               // 74
+```
+
+Prog `FUZZY_THRESHOLD = 80` zostal dobrany eksperymentalnie -- lapie typowe roznice w pisowni nazw firm, jednoczesnie unikajac falszywych dopasowan.
+
+## Kod zrodlowy
+
+```ts
+import { ratio } from 'fuzzball'
+
+const FUZZY_THRESHOLD = 80
+
+const fuzzyPass: ReconciliationPass = {
+  name: 'fuzzy',
+  order: 400,
+
+  async run(context: MatchingContext): Promise<MatchResult[]> {
+    const results: MatchResult[] = []
+    const usedTxIds = new Set<string>()
+
+    for (const invoice of context.invoices) {
+      if (!invoice.sellerName) continue
+
+      for (const tx of context.transactions) {
+        if (usedTxIds.has(tx.id)) continue
+        if (Math.abs(tx.amount) !== invoice.grossAmount) continue
+
+        const txName = tx.senderName ?? tx.recipientName
+        if (!txName) continue
+
+        const score = ratio(invoice.sellerName, txName)
+        if (score >= FUZZY_THRESHOLD) {
+          results.push({
+            invoiceId: invoice.id,
+            transactionId: tx.id,
+            confidence: 80,
+            reasons: [
+              `Fuzzy name match: "${invoice.sellerName}" ~ "${txName}" (score: ${score})`,
+              `Exact amount match: ${Math.abs(tx.amount)} grosze`,
+            ],
+          })
+          usedTxIds.add(tx.id)
+          break
+        }
+      }
+    }
+
+    return results
+  },
+}
+```
+
+## Przyklad
+
+```ts
+const invoice = {
+  id: 'inv-001',
+  invoiceNumber: 'FV/2026/03/077',
+  sellerNIP: '5213456784',
+  sellerName: 'TECHSOLUTIONS SP Z OO',
+  grossAmount: 369000, // 3 690,00 PLN
+  issueDate: '2026-03-01',
+}
+
+const transaction = {
+  id: 'tx-001',
+  date: '2026-03-14',
+  amount: -369000,
+  description: 'Zaplata za uslugi IT',
+  senderName: 'TECHSOLUTIONS SP. Z O.O.',
+}
+
+// fuzzball.ratio("TECHSOLUTIONS SP Z OO", "TECHSOLUTIONS SP. Z O.O.") = 85
+// 85 >= 80 -> match!
+// confidence: 80
+```
+
+## Kiedy przydatne
+
+| Sytuacja | Faktura | Przelew |
+|----------|---------|---------|
+| Skrot formy prawnej | `SP Z OO` | `SP. Z O.O.` |
+| Brak polskich znakow | `LODZKA` | `LODZKA` |
+| Dodatkowy suffix | `FIRMA ABC` | `FIRMA ABC S.A.` |
+
+## Wymagania
+
+<Aside type="caution">
+  Pass wymaga dostepnosci nazw po obu stronach:
+  - `invoice.sellerName` -- nazwa sprzedawcy na fakturze
+  - `tx.senderName` lub `tx.recipientName` -- nazwa nadawcy/odbiorcy z wyciagu
+
+  Jesli ktorykolwiek wartosc jest pusta, pass pomija dana pare.
+</Aside>
+
+<Aside type="note">
+  W przeciwienstwie do passow 100-300, fuzzy **nie** sprawdza NIP. Opiera sie wylacznie na nazwie i kwocie. Dlatego confidence wynosi 80%, nie wiecej.
+</Aside>

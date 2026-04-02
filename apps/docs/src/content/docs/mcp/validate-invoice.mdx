@@ -1,0 +1,99 @@
+---
+title: "Narzędzie: validate-invoice"
+description: Walidacja faktury przed wysyłką do KSeF.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Narzędzie `validate-invoice` sprawdza poprawność danych faktury zgodnie z regułami walidacyjnymi KSeF. Operacja jest lokalna i nie wymaga połączenia z API.
+
+## Parametry wejściowe
+
+| Parametr | Typ | Wymagany | Opis |
+|----------|-----|----------|------|
+| `invoice` | `object` | Tak | Obiekt faktury do walidacji |
+
+Struktura obiektu `invoice`:
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `invoiceNumber` | `string` | Numer faktury |
+| `issueDate` | `string` | Data wystawienia (YYYY-MM-DD) |
+| `sellerNip` | `string` | NIP sprzedawcy |
+| `buyerNip` | `string` | NIP nabywcy |
+| `netAmount` | `number` | Kwota netto w groszach |
+| `vatAmount` | `number` | Kwota VAT w groszach |
+| `grossAmount` | `number` | Kwota brutto w groszach |
+
+## Format odpowiedzi
+
+```ts
+{
+  valid: boolean
+  errors: ValidationError[]
+}
+```
+
+## Przykład wywołania
+
+```json
+{
+  "name": "validate-invoice",
+  "arguments": {
+    "invoice": {
+      "invoiceNumber": "FV/2026/03/001",
+      "issueDate": "2026-03-15",
+      "sellerNip": "1234567890",
+      "buyerNip": "0987654321",
+      "netAmount": 100000,
+      "vatAmount": 23000,
+      "grossAmount": 123000
+    }
+  }
+}
+```
+
+## Przykład odpowiedzi -- faktura poprawna
+
+```json
+{
+  "valid": true,
+  "errors": []
+}
+```
+
+## Przykład odpowiedzi -- faktura z błędami
+
+```json
+{
+  "valid": false,
+  "errors": [
+    {
+      "rule": "buyer-nip-checksum",
+      "message": "NIP nabywcy ma nieprawidłową sumę kontrolną",
+      "field": "buyerNip",
+      "value": "1234567891"
+    },
+    {
+      "rule": "amount-consistency",
+      "message": "Suma netto + VAT nie równa się kwocie brutto",
+      "fields": ["netAmount", "vatAmount", "grossAmount"]
+    }
+  ]
+}
+```
+
+## Kiedy używać
+
+- Przed wysyłką faktury przez `send-invoice`
+- Gdy użytkownik prosi o sprawdzenie poprawności faktury
+- W procesie automatycznej walidacji partii faktur
+
+<Aside type="tip">
+Walidacja nie wymaga tokena ani połączenia z KSeF. Wszystkie reguły sprawdzane są lokalnie.
+</Aside>
+
+## Powiązane narzędzia
+
+- `send-invoice` -- wyślij zwalidowaną fakturę
+- `query-invoices` -- sprawdź, czy faktura o tym numerze już istnieje

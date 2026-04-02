@@ -1,0 +1,146 @@
+---
+title: Schematy Zod
+description: Kompletna referencja schematów Zod definiujących model domenowy ksefnik.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Wszystkie modele domenowe w ksefnik są definiowane jako schematy Zod w pakiecie `@ksefnik/shared`. Typy TypeScript są generowane automatycznie przez `z.infer`.
+
+```typescript
+import {
+  InvoiceSchema, LineItemSchema,
+  BankTransactionSchema,
+  MatchSchema,
+  ReconciliationReportSchema,
+  nipSchema,
+} from '@ksefnik/shared'
+```
+
+## InvoiceSchema
+
+Schemat faktury KSeF.
+
+| Pole | Typ | Wymagane | Opis |
+|------|-----|----------|------|
+| `id` | `z.string().uuid()` | tak | Unikalne ID faktury |
+| `invoiceNumber` | `z.string().min(1)` | tak | Numer faktury |
+| `sellerNIP` | `nipSchema` | tak | NIP sprzedawcy (10 cyfr + checksum) |
+| `buyerNIP` | `nipSchema` | nie | NIP nabywcy |
+| `grossAmount` | `z.number().int().positive()` | tak | Kwota brutto w groszach |
+| `netAmount` | `z.number().int().positive()` | nie | Kwota netto w groszach |
+| `vatAmount` | `z.number().int().nonnegative()` | nie | Kwota VAT w groszach |
+| `currency` | `z.literal('PLN')` | tak | Waluta (zawsze PLN) |
+| `issueDate` | `z.string().date()` | tak | Data wystawienia (YYYY-MM-DD) |
+| `salesDate` | `z.string().date()` | nie | Data sprzedaży |
+| `dueDate` | `z.string().date()` | nie | Termin płatności |
+| `ksefReference` | `z.string()` | nie | Numer referencyjny KSeF |
+| `sellerName` | `z.string()` | nie | Nazwa sprzedawcy |
+| `buyerName` | `z.string()` | nie | Nazwa nabywcy |
+| `description` | `z.string()` | nie | Opis faktury |
+| `lineItems` | `z.array(LineItemSchema)` | nie | Pozycje faktury |
+| `rawXml` | `z.string()` | nie | Surowy XML z KSeF |
+| `createdAt` | `z.string().datetime()` | tak | Timestamp utworzenia (ISO) |
+
+## LineItemSchema
+
+Schemat pozycji faktury.
+
+| Pole | Typ | Wymagane | Opis |
+|------|-----|----------|------|
+| `lineNumber` | `z.number().int().positive()` | tak | Numer pozycji |
+| `description` | `z.string().min(1)` | tak | Opis pozycji |
+| `unit` | `z.string()` | nie | Jednostka miary (szt., kg, godz.) |
+| `quantity` | `z.number().positive()` | nie | Ilość |
+| `unitNetPrice` | `z.number().int()` | nie | Cena jednostkowa netto w groszach |
+| `netAmount` | `z.number().int().positive()` | tak | Kwota netto pozycji w groszach |
+| `vatRate` | `z.number().int().min(0).max(100)` | nie | Stawka VAT (0, 5, 8, 23) |
+
+## BankTransactionSchema
+
+Schemat transakcji bankowej.
+
+| Pole | Typ | Wymagane | Opis |
+|------|-----|----------|------|
+| `id` | `z.string().uuid()` | tak | Unikalne ID transakcji |
+| `date` | `z.string().date()` | tak | Data transakcji (YYYY-MM-DD) |
+| `amount` | `z.number().int()` | tak | Kwota w groszach (ujemna = wydatek) |
+| `description` | `z.string()` | tak | Opis transakcji z banku |
+| `senderName` | `z.string()` | nie | Nazwa nadawcy |
+| `senderNIP` | `z.string().regex(/^\d{10}$/)` | nie | NIP nadawcy |
+| `recipientName` | `z.string()` | nie | Nazwa odbiorcy |
+| `recipientNIP` | `z.string().regex(/^\d{10}$/)` | nie | NIP odbiorcy |
+| `bank` | `z.enum([...])` | tak | Źródło: `mt940`, `mbank`, `ing`, `pko`, `santander`, `other` |
+| `raw` | `z.string()` | tak | Surowy wiersz z wyciągu |
+| `createdAt` | `z.string().datetime()` | tak | Timestamp importu (ISO) |
+
+<Aside>
+  Pole `amount` może być ujemne (płatności wychodzące). Pipeline uzgadniania porównuje wartości bezwzględne.
+</Aside>
+
+## MatchSchema
+
+Schemat dopasowania faktury do transakcji.
+
+| Pole | Typ | Wymagane | Opis |
+|------|-----|----------|------|
+| `id` | `z.string().uuid()` | tak | Unikalne ID dopasowania |
+| `invoiceId` | `z.string().uuid()` | tak | ID faktury |
+| `transactionId` | `z.string().uuid()` | tak | ID głównej transakcji |
+| `transactionIds` | `z.array(z.string().uuid())` | nie | ID transakcji (przy partial match) |
+| `confidence` | `z.number().int().min(0).max(100)` | tak | Pewność dopasowania (0-100) |
+| `passName` | `z.string()` | tak | Nazwa passa, który dokonał dopasowania |
+| `reasons` | `z.array(z.string())` | tak | Powody dopasowania |
+| `confirmed` | `z.boolean().default(false)` | tak | Czy potwierdzone przez użytkownika |
+| `createdAt` | `z.string().datetime()` | tak | Timestamp utworzenia (ISO) |
+
+<Aside type="tip">
+  Pole `transactionIds` jest wypełniane tylko przez pass `partial` (order 450), gdy kilka transakcji składa się na kwotę faktury.
+</Aside>
+
+## ReconciliationReportSchema
+
+Schemat raportu uzgadniania.
+
+| Pole | Typ | Wymagane | Opis |
+|------|-----|----------|------|
+| `id` | `z.string().uuid()` | tak | Unikalne ID raportu |
+| `matched` | `z.array(MatchSchema)` | tak | Lista dopasowań |
+| `unmatchedInvoices` | `z.array(InvoiceSchema)` | tak | Niedopasowane faktury |
+| `unmatchedTransactions` | `z.array(BankTransactionSchema)` | tak | Niedopasowane transakcje |
+| `summary` | `SummarySchema` | tak | Podsumowanie statystyczne |
+| `runAt` | `z.string().datetime()` | tak | Timestamp uruchomienia (ISO) |
+| `durationMs` | `z.number().int().nonnegative()` | tak | Czas trwania w milisekundach |
+
+### SummarySchema (zagnieżdżony)
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `totalInvoices` | `z.number().int().nonnegative()` | Łączna liczba faktur |
+| `totalTransactions` | `z.number().int().nonnegative()` | Łączna liczba transakcji |
+| `matchedCount` | `z.number().int().nonnegative()` | Liczba dopasowań |
+| `unmatchedInvoiceCount` | `z.number().int().nonnegative()` | Niedopasowane faktury |
+| `unmatchedTransactionCount` | `z.number().int().nonnegative()` | Niedopasowane transakcje |
+| `averageConfidence` | `z.number().min(0).max(100)` | Średni confidence |
+| `passBreakdown` | `z.record(z.string(), z.number())` | Dopasowania per pass |
+
+## nipSchema
+
+Schemat walidujący polski NIP.
+
+```typescript
+const nipSchema = z
+  .string()
+  .regex(/^\d{10}$/, 'NIP must be exactly 10 digits')
+  .refine(isValidNIP, { message: 'Invalid NIP checksum' })
+```
+
+Walidacja sumy kontrolnej NIP z wagami `[6, 5, 7, 2, 3, 4, 5, 6, 7]`:
+
+```typescript
+function isValidNIP(nip: string): boolean {
+  const digits = nip.split('').map(Number)
+  const sum = NIP_WEIGHTS.reduce((acc, w, i) => acc + w * digits[i]!, 0)
+  return sum % 11 === digits[9]
+}
+```

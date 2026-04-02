@@ -1,0 +1,181 @@
+---
+title: Wlasny adapter
+description: Jak zaimplementowac wlasny adapter do komunikacji z API KSeF.
+---
+
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components'
+
+## Kiedy potrzebny wlasny adapter
+
+- Twoja firma ma wlasne proxy/gateway do KSeF
+- Chcesz dodac logowanie, metryki lub audyt
+- Potrzebujesz integracji z innym systemem fakturowym
+- API KSeF jest ukryte za VPN i wymaga specjalnej konfiguracji
+
+## Interfejs KsefAdapter
+
+Wystarczy zaimplementowac trzy metody:
+
+```ts
+interface KsefAdapter {
+  fetchInvoices(opts: FetchInvoicesOpts): Promise<Invoice[]>
+  sendInvoice(input: SendInvoiceInput): Promise<SendInvoiceResult>
+  getUpo(ksefReference: string): Promise<UpoResult>
+}
+```
+
+## Typy wejscia/wyjscia
+
+```ts
+interface FetchInvoicesOpts {
+  from: string         // data poczatkowa (ISO 8601)
+  to: string           // data koncowa (ISO 8601)
+  nip?: string         // filtruj po NIP kontrahenta
+  pageSize?: number    // rozmiar strony
+  pageOffset?: number  // offset paginacji
+}
+
+interface SendInvoiceInput {
+  xml: string   // XML faktury w formacie KSeF
+  nip: string   // NIP wystawcy
+}
+
+interface SendInvoiceResult {
+  ksefReference: string  // numer referencyjny KSeF
+  timestamp: string      // timestamp wystawienia
+}
+
+interface UpoResult {
+  ksefReference: string
+  upoXml: string
+  status: 'confirmed' | 'pending' | 'rejected'
+}
+```
+
+## Pelny przyklad: adapter z REST proxy
+
+Scenariusz: firma ma wewnetrzne API `/api/ksef/*`, ktore proxy'uje zapytania do KSeF z dodatkowa autoryzacja.
+
+<Steps>
+1. Zaimplementuj interfejs KsefAdapter
+2. Przekaz adapter do createKsefnik()
+3. Uzyj SDK jak zwykle
+</Steps>
+
+### Krok 1: Implementacja
+
+```ts
+import type {
+  KsefAdapter,
+  FetchInvoicesOpts,
+  SendInvoiceInput,
+  SendInvoiceResult,
+  UpoResult,
+  Invoice,
+} from '@ksefnik/shared'
+
+export class CompanyProxyAdapter implements KsefAdapter {
+  constructor(
+    private readonly baseUrl: string,
+    private readonly apiKey: string,
+  ) {}
+
+  private async request<T>(path: string, opts?: RequestInit): Promise<T> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': this.apiKey,
+        ...opts?.headers,
+      },
+    })
+    if (!res.ok) throw new Error(`Proxy error: ${res.status} ${res.statusText}`)
+    return res.json() as Promise<T>
+  }
+
+  async fetchInvoices(opts: FetchInvoicesOpts): Promise<Invoice[]> {
+    const params = new URLSearchParams({
+      from: opts.from,
+      to: opts.to,
+      ...(opts.nip && { nip: opts.nip }),
+      ...(opts.pageSize && { pageSize: String(opts.pageSize) }),
+      ...(opts.pageOffset && { pageOffset: String(opts.pageOffset) }),
+    })
+    return this.request<Invoice[]>(`/api/ksef/invoices?${params}`)
+  }
+
+  async sendInvoice(input: SendInvoiceInput): Promise<SendInvoiceResult> {
+    return this.request<SendInvoiceResult>('/api/ksef/invoices', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+  }
+
+  async getUpo(ksefReference: string): Promise<UpoResult> {
+    return this.request<UpoResult>(`/api/ksef/upo/${ksefReference}`)
+  }
+}
+```
+
+### Krok 2: Uzycie z createKsefnik
+
+```ts
+import { createKsefnik } from '@ksefnik/core'
+import { CompanyProxyAdapter } from './company-proxy-adapter.js'
+
+const adapter = new CompanyProxyAdapter(
+  'https://internal-api.company.com',
+  process.env.PROXY_API_KEY!,
+)
+
+const ksefnik = createKsefnik({
+  config: { nip: '5213456784', environment: 'production' },
+  adapter,
+})
+
+// Od tego momentu SDK uzywa twojego adaptera
+const invoices = await ksefnik.invoices.fetch({
+  from: '2026-03-01',
+  to: '2026-03-31',
+})
+```
+
+## Przyklad: adapter z logowaniem
+
+<Tabs>
+  <TabItem label="Wrapper">
+    ```ts
+    import type { KsefAdapter, FetchInvoicesOpts, Invoice } from '@ksefnik/shared'
+
+    export class LoggingAdapter implements KsefAdapter {
+      constructor(private readonly inner: KsefAdapter) {}
+
+      async fetchInvoices(opts: FetchInvoicesOpts): Promise<Invoice[]> {
+        console.log('[KSeF] fetchInvoices', opts)
+        const start = Date.now()
+        const result = await this.inner.fetchInvoices(opts)
+        console.log(`[KSeF] fetchInvoices -> ${result.length} invoices (${Date.now() - start}ms)`)
+        return result
+      }
+
+      // ... analogicznie sendInvoice i getUpo
+    }
+    ```
+  </TabItem>
+  <TabItem label="Uzycie">
+    ```ts
+    const realAdapter = new KsefAdapterImpl(client, config)
+    const loggingAdapter = new LoggingAdapter(realAdapter)
+
+    const ksefnik = createKsefnik({ config, adapter: loggingAdapter })
+    ```
+  </TabItem>
+</Tabs>
+
+<Aside type="tip">
+  Wzorzec decorator (wrapper) pozwala laczyc funkcjonalnosci -- np. `LoggingAdapter` opakowujacy `RetryAdapter` opakowujacy `CompanyProxyAdapter`.
+</Aside>
+
+<Aside type="note">
+  Adapter nie musi obslugiwac sesji. Jesli twoje proxy zarzadza sesjami KSeF samodzielnie, mozesz po prostu delegowac zapytania HTTP bez logiki sesji.
+</Aside>

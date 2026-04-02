@@ -1,0 +1,135 @@
+---
+title: Mechanizm walidacji
+description: Jak działa mechanizm walidacji faktur w ksefnik.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+import InvoiceValidatorPlayground from '../../../components/InvoiceValidatorPlayground'
+
+Ksefnik zawiera silnik walidacji faktur oparty na regułach. Każda reguła sprawdza jeden aspekt faktury i zwraca wynik walidacji. Silnik łączy wyniki wszystkich reguł w raport.
+
+## Interfejs ValidationRule
+
+Każda reguła implementuje interfejs:
+
+```typescript
+interface ValidationRule {
+  name: string
+  validate(invoice: Invoice, context?: ValidationContext): ValidationResult[]
+}
+```
+
+- **`name`** -- unikalna nazwa reguły (np. `'nip-format'`, `'amount-positive'`)
+- **`validate()`** -- funkcja walidująca, zwraca tablicę wyników
+
+## ValidationResult
+
+Wynik pojedynczego sprawdzenia:
+
+```typescript
+interface ValidationResult {
+  valid: boolean       // czy sprawdzenie przeszło
+  rule: string         // nazwa reguły
+  field?: string       // pole, które nie przeszło walidacji
+  message?: string     // komunikat błędu (tylko gdy valid = false)
+  value?: unknown      // wartość, która nie przeszła walidacji
+}
+```
+
+## ValidationContext
+
+Opcjonalny kontekst przekazywany do reguł:
+
+```typescript
+interface ValidationContext {
+  allInvoices?: Invoice[]  // wszystkie faktury (dla duplicate-check)
+  now?: Date               // bieżąca data (dla date checks, przydatne w testach)
+}
+```
+
+<Aside type="tip">
+  Pole `now` pozwala na deterministyczne testy reguł datowych bez zależności od aktualnej daty systemowej.
+</Aside>
+
+## Walidacja pojedynczej faktury
+
+```typescript
+import { validateInvoice } from '@ksefnik/core'
+import { allRules } from '@ksefnik/core'
+
+const report = validateInvoice(invoice, allRules)
+
+console.log(report.valid)    // true/false
+console.log(report.results)  // ValidationResult[]
+```
+
+Funkcja `validateInvoice` zwraca `ValidationReport`:
+
+```typescript
+interface ValidationReport {
+  invoice: Invoice
+  results: ValidationResult[]
+  valid: boolean  // true gdy WSZYSTKIE wyniki mają valid = true
+}
+```
+
+## Walidacja wielu faktur
+
+```typescript
+import { validateInvoices, allRules } from '@ksefnik/core'
+
+const reports = validateInvoices(invoices, allRules)
+
+for (const report of reports) {
+  if (!report.valid) {
+    const errors = report.results.filter(r => !r.valid)
+    console.log(`${report.invoice.invoiceNumber}: ${errors.length} błędów`)
+  }
+}
+```
+
+Funkcja `validateInvoices` automatycznie tworzy kontekst z `allInvoices` (do sprawdzania duplikatów) i `now` (bieżąca data):
+
+```typescript
+export function validateInvoices(
+  invoices: Invoice[],
+  rules: ValidationRule[],
+): ValidationReport[] {
+  const context: ValidationContext = {
+    allInvoices: invoices,
+    now: new Date(),
+  }
+  return invoices.map((inv) => validateInvoice(inv, rules, context))
+}
+```
+
+## Domyślne reguły (allRules)
+
+Ksefnik zawiera **20 wbudowanych reguł** pogrupowanych tematycznie:
+
+| Grupa | Reguły |
+|-------|--------|
+| NIP | `nip-format`, `buyer-nip-format`, `nip-not-zeros`, `seller-buyer-different` |
+| Kwoty | `amount-positive`, `amount-max`, `line-items-sum`, `vat-calculation` |
+| Daty | `date-valid`, `date-not-future`, `date-order`, `date-range` |
+| Pozostałe | `required-fields`, `invoice-number-format`, `duplicate-check`, `currency-valid`, `vat-rate-valid`, `quantity-positive`, `description-length`, `ksef-reference-format` |
+
+## Wybrane reguły
+
+Nie musisz używać wszystkich reguł naraz. Możesz wybrać podzbiór:
+
+```typescript
+import { validateInvoice, nipFormatRule, amountPositiveRule, dateValidRule } from '@ksefnik/core'
+
+const report = validateInvoice(invoice, [nipFormatRule, amountPositiveRule, dateValidRule])
+```
+
+<Aside type="note">
+  Szczegóły każdej grupy reguł znajdziesz na dedykowanych stronach: [NIP](/walidacja/reguly-nip/), [Kwoty](/walidacja/reguly-kwot/), [Daty](/walidacja/reguly-dat/), [Pozostałe](/walidacja/reguly-inne/).
+</Aside>
+
+## Wypróbuj walidator
+
+Edytuj pola faktury i obserwuj jak reguły reagują w czasie rzeczywistym:
+
+<InvoiceValidatorPlayground client:visible />

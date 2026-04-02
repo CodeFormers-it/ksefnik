@@ -1,0 +1,158 @@
+---
+title: "Pass 450: partial"
+description: Dopasowanie czesciowe -- kilka przelewow skladajacych sie na jedna fakture.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components'
+
+## Parametry
+
+| Pole | Wartosc |
+|------|---------|
+| **name** | `partial` |
+| **order** | `450` |
+| **confidence** | `70%` (dokladna suma) / `50%` (suma >= 95%) |
+
+## Strategia
+
+Pass grupuje transakcje po NIP, a nastepnie algorytmem zachlannym (greedy) probuje zsumowac kwoty do `invoice.grossAmount`.
+
+<Steps>
+1. Zgrupuj transakcje po NIP (`tx.senderNIP` lub `tx.recipientNIP`)
+2. Dla kazdej faktury znajdz grupe transakcji z pasujacym `invoice.sellerNIP`
+3. Posortuj transakcje w grupie malejaco po kwocie
+4. Zachlannie sumuj transakcje, az suma osiagnie `grossAmount`
+5. Jesli wynik sklada sie z >= 2 transakcji i pokrywa >= 95% kwoty -- dopasuj
+</Steps>
+
+## Warunki dopasowania
+
+| Warunek | Opis |
+|---------|------|
+| Minimum 2 transakcje | Jedna transakcja = exact match, nie partial |
+| Coverage >= 95% | Suma transakcji musi pokryc co najmniej 95% kwoty faktury |
+| Ten sam NIP | Wszystkie transakcje od tego samego kontrahenta |
+
+## Dwa poziomy pewnosci
+
+- **70%** -- suma transakcji dokladnie rowna `grossAmount` (remaining === 0)
+- **50%** -- suma pokrywa >= 95%, ale nie dokladnie 100%
+
+## Kod zrodlowy
+
+```ts
+const partialPass: ReconciliationPass = {
+  name: 'partial',
+  order: 450,
+
+  async run(context: MatchingContext): Promise<MatchResult[]> {
+    const results: MatchResult[] = []
+
+    // Grupowanie transakcji po NIP
+    const txByNip = new Map<string, typeof context.transactions>()
+    for (const tx of context.transactions) {
+      const nip = tx.senderNIP ?? tx.recipientNIP
+      if (!nip) continue
+      const group = txByNip.get(nip) ?? []
+      group.push(tx)
+      txByNip.set(nip, group)
+    }
+
+    for (const invoice of context.invoices) {
+      const txs = txByNip.get(invoice.sellerNIP)
+      if (!txs || txs.length < 2) continue
+
+      // Greedy: sortuj malejaco, sumuj do grossAmount
+      const sorted = [...txs].sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+      const selected: string[] = []
+      let remaining = invoice.grossAmount
+
+      for (const tx of sorted) {
+        const absAmount = Math.abs(tx.amount)
+        if (absAmount <= remaining) {
+          selected.push(tx.id)
+          remaining -= absAmount
+        }
+        if (remaining === 0) break
+      }
+
+      if (selected.length < 2) continue
+
+      const ratio = (invoice.grossAmount - remaining) / invoice.grossAmount
+      if (ratio < 0.95) continue
+
+      const isExact = remaining === 0
+      const confidence = isExact ? 70 : 50
+
+      results.push({
+        invoiceId: invoice.id,
+        transactionId: selected[0]!,
+        transactionIds: selected,
+        confidence,
+        reasons: [
+          `Partial match: ${selected.length} transactions from NIP ${invoice.sellerNIP}`,
+          `Sum covers ${Math.round(ratio * 100)}% of invoice amount`,
+          isExact ? 'Exact sum match' : 'Approximate sum match',
+        ],
+      })
+    }
+
+    return results
+  },
+}
+```
+
+## Przyklad -- dokladna suma (70%)
+
+```ts
+const invoice = {
+  id: 'inv-001',
+  invoiceNumber: 'FV/2026/03/099',
+  sellerNIP: '5213456784',
+  grossAmount: 1000000, // 10 000,00 PLN
+  issueDate: '2026-03-01',
+}
+
+const transactions = [
+  {
+    id: 'tx-001',
+    date: '2026-03-10',
+    amount: -600000, // 6 000,00 PLN
+    senderNIP: '5213456784',
+    description: 'Pierwsza rata za FV',
+  },
+  {
+    id: 'tx-002',
+    date: '2026-03-20',
+    amount: -400000, // 4 000,00 PLN
+    senderNIP: '5213456784',
+    description: 'Druga rata za FV',
+  },
+]
+
+// 600000 + 400000 = 1000000 -> dokladnie grossAmount
+// confidence: 70
+// transactionIds: ['tx-001', 'tx-002']
+```
+
+## Struktura Match dla partial
+
+W przeciwienstwie do innych passow, partial zwraca **tablice** identyfikatorow transakcji:
+
+```ts
+interface MatchResult {
+  invoiceId: string
+  transactionId: string      // pierwszy z wybranych (dla kompatybilnosci)
+  transactionIds?: string[]  // WSZYSTKIE wybrane transakcje
+  confidence: number
+  reasons: string[]
+}
+```
+
+<Aside type="tip">
+  Pole `transactionIds` jest unikalne dla passa partial. Dzieki niemu pipeline wie, ze wszystkie transakcje w tablicy sa juz sparowane i nie powinny byc uzyte ponownie.
+</Aside>
+
+<Aside type="caution">
+  Algorytm greedy nie gwarantuje optymalnego rozwiazania. Jesli transakcje to 700, 600 i 400 groszow, a faktura to 1000, greedy wybierze 700 + nie znajdzie drugiej pasujace (600 > 300 remaining), pomijajac rozwiazanie 600 + 400.
+</Aside>

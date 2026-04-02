@@ -1,0 +1,89 @@
+---
+title: "Komenda: reconcile"
+description: Uzgadnianie faktur KSeF z transakcjami bankowymi.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Komenda `reconcile` dopasowuje faktury KSeF do transakcji z wyciągu bankowego, generując raport uzgodnienia.
+
+## Użycie
+
+```bash
+ksefnik reconcile --bank <plik> [--from <data>] [--to <data>] [--format json|table]
+```
+
+## Parametry
+
+| Parametr | Wymagany | Opis |
+|----------|----------|------|
+| `--bank` | Tak | Ścieżka do pliku wyciągu bankowego |
+| `--from` | Nie | Data początkowa (domyślnie: najwcześniejsza z wyciągu) |
+| `--to` | Nie | Data końcowa (domyślnie: najpóźniejsza z wyciągu) |
+| `--format` | Nie | Format wyjścia: `json` lub `table` (domyślnie) |
+
+## Wymagania
+
+- Skonfigurowany adapter KSeF (token, NIP)
+- Plik wyciągu bankowego w obsługiwanym formacie
+
+## Przykład -- format tabeli
+
+```bash
+ksefnik reconcile --bank ./wyciag-03-2026.csv
+
+# Uzgadnianie faktur KSeF z wyciągiem bankowym...
+# Pobrano: 12 faktur z KSeF
+# Zaimportowano: 47 transakcji bankowych
+#
+# === Raport uzgodnienia ===
+#
+# Dopasowane:     10 (83%)
+# Niedopasowane:   2 faktury, 37 transakcji
+# Średnia pewność: 0.92
+#
+# Dopasowania:
+# ┌──────────────────┬──────────────┬──────────────┬─────────┐
+# │ Faktura          │ Transakcja   │ Kwota        │ Pewność │
+# ├──────────────────┼──────────────┼──────────────┼─────────┤
+# │ FV/2026/03/001   │ 2026-03-05   │ 1 230,00 PLN │ 1.00   │
+# │ FV/2026/03/002   │ 2026-03-08   │ 5 000,00 PLN │ 0.95   │
+# │ FV/2026/03/003   │ 2026-03-12   │   615,00 PLN │ 0.87   │
+# └──────────────────┴──────────────┴──────────────┴─────────┘
+```
+
+## Przykład -- format JSON
+
+```bash
+ksefnik reconcile --bank ./wyciag.csv --format json
+```
+
+```json
+{
+  "summary": {
+    "matched": 10,
+    "unmatchedInvoices": 2,
+    "unmatchedTransactions": 37,
+    "averageConfidence": 0.92
+  },
+  "matches": [
+    {
+      "matchId": "m-001",
+      "invoice": { "invoiceNumber": "FV/2026/03/001", "grossAmount": 123000 },
+      "transaction": { "date": "2026-03-05", "amount": -123000 },
+      "confidence": 1.0,
+      "passName": "exact-nip-amount"
+    }
+  ],
+  "unmatchedInvoices": [],
+  "unmatchedTransactions": []
+}
+```
+
+<Aside type="tip">
+Pewność (confidence) 1.0 oznacza dopasowanie po referencji KSeF lub dokładne dopasowanie NIP + kwota. Wartości poniżej 0.8 mogą wymagać ręcznej weryfikacji.
+</Aside>
+
+<Aside>
+Silnik uzgadniania wykonuje 6 przebiegów (passów) od najbardziej do najmniej pewnego. Szczegóły w sekcji Silnik uzgadniania.
+</Aside>

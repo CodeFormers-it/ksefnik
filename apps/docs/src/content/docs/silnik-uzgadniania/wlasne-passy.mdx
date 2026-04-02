@@ -1,0 +1,195 @@
+---
+title: Wlasne passy
+description: Jak tworzyc wlasne passy uzgadniania w ksefnik.
+---
+
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components'
+
+## Interfejs ReconciliationPass
+
+Kazdy pass musi implementowac trzy elementy:
+
+```ts
+interface ReconciliationPass {
+  name: string
+  order: number
+  run(context: MatchingContext): Promise<MatchResult[]>
+}
+```
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `name` | `string` | Unikalna nazwa passa (pojawi sie w `match.passName`) |
+| `order` | `number` | Kolejnosc wykonania (nizszy = wczesniej) |
+| `run` | `function` | Logika dopasowania |
+
+## MatchingContext
+
+Kontekst przekazywany do metody `run()`:
+
+```ts
+interface MatchingContext {
+  invoices: Invoice[]            // niesparowane faktury
+  transactions: BankTransaction[] // niesparowane transakcje
+  alreadyMatched: Match[]        // dotychczasowe dopasowania
+}
+```
+
+<Aside type="note">
+  Tablice `invoices` i `transactions` zawieraja **tylko niesparowane** elementy. Pipeline automatycznie filtruje juz dopasowane przed wywolaniem `run()`.
+</Aside>
+
+## MatchResult
+
+Wynik zwracany z `run()`:
+
+```ts
+interface MatchResult {
+  invoiceId: string
+  transactionId: string
+  transactionIds?: string[]   // opcjonalne, dla dopasowan czesciowych
+  confidence: number          // 0-100
+  reasons: string[]           // uzasadnienie dopasowania
+}
+```
+
+## Konwencja numeracji order
+
+| Zakres | Przeznaczenie |
+|--------|--------------|
+| 100-500 | Passy core (ksef-ref, exact, invoice-ref, fuzzy, partial, proximity) |
+| 600+ | Passy z pluginow |
+
+<Aside type="caution">
+  Nie uzywaj numerow 100-500 dla wlasnych passow -- moga kolidowac z passami core. Zaczynaj od **600**.
+</Aside>
+
+## Pelny przyklad: pass po numerze zamowienia
+
+Scenariusz: twoj system ERP dodaje numer zamowienia (order ID) do tytulu przelewu. Chcesz dopasowywac faktury po tym numerze.
+
+<Steps>
+1. Zdefiniuj pass
+2. Zarejestruj go przez plugin
+3. Uruchom pipeline
+</Steps>
+
+### Krok 1: Definicja passa
+
+```ts
+import type { ReconciliationPass, MatchingContext, MatchResult } from '@ksefnik/shared'
+
+const ORDER_ID_PATTERN = /ORD-\d{6,}/i
+
+export const orderIdPass: ReconciliationPass = {
+  name: 'order-id',
+  order: 600,
+
+  async run(context: MatchingContext): Promise<MatchResult[]> {
+    const results: MatchResult[] = []
+    const usedTxIds = new Set<string>()
+
+    for (const invoice of context.invoices) {
+      // Zakladamy, ze numer zamowienia jest w polu description lub customFields
+      const orderId = extractOrderId(invoice)
+      if (!orderId) continue
+
+      for (const tx of context.transactions) {
+        if (usedTxIds.has(tx.id)) continue
+
+        if (tx.description.toUpperCase().includes(orderId.toUpperCase())) {
+          const amountMatch = Math.abs(tx.amount) === invoice.grossAmount
+          results.push({
+            invoiceId: invoice.id,
+            transactionId: tx.id,
+            confidence: amountMatch ? 88 : 70,
+            reasons: [
+              `Order ID "${orderId}" found in transaction description`,
+              ...(amountMatch ? ['Amount also matches'] : []),
+            ],
+          })
+          usedTxIds.add(tx.id)
+          break
+        }
+      }
+    }
+
+    return results
+  },
+}
+
+function extractOrderId(invoice: { invoiceNumber: string }): string | null {
+  const match = invoice.invoiceNumber.match(ORDER_ID_PATTERN)
+  return match ? match[0] : null
+}
+```
+
+### Krok 2: Rejestracja przez plugin
+
+```ts
+import type { KsefPlugin } from '@ksefnik/shared'
+import { orderIdPass } from './order-id.pass.js'
+
+export const orderIdPlugin: KsefPlugin = {
+  name: 'order-id-matcher',
+  version: '1.0.0',
+
+  reconciliationPasses() {
+    return [orderIdPass]
+  },
+}
+```
+
+### Krok 3: Uzycie
+
+<Tabs>
+  <TabItem label="SDK">
+    ```ts
+    import { createKsefnik } from '@ksefnik/core'
+    import { orderIdPlugin } from './order-id-plugin.js'
+
+    const ksefnik = createKsefnik({ config })
+    ksefnik.plugins.register(orderIdPlugin)
+
+    const report = await ksefnik.reconciliation.run(invoices, transactions)
+    // report.summary.passBreakdown['order-id'] === 3
+    ```
+  </TabItem>
+  <TabItem label="Standalone">
+    ```ts
+    import { runPipeline, defaultPasses } from '@ksefnik/core'
+    import { orderIdPass } from './order-id.pass.js'
+
+    const report = await runPipeline(
+      invoices,
+      transactions,
+      [...defaultPasses, orderIdPass],
+    )
+    ```
+  </TabItem>
+</Tabs>
+
+## Dobre praktyki
+
+1. **Zawsze uzywaj `usedTxIds`** -- zapobiega przypisaniu tej samej transakcji do wielu faktur w ramach jednego passa
+2. **Breakuj po pierwszym trafieniu** -- jedna faktura = jedna transakcja (chyba ze piszesz pass partial)
+3. **Dodawaj reasons** -- kazde dopasowanie powinno miec czytelne uzasadnienie
+4. **Testuj z Vitest** -- pass to czysta funkcja, latwa do unit testowania
+
+```ts
+import { describe, it, expect } from 'vitest'
+import { orderIdPass } from './order-id.pass.js'
+
+describe('orderIdPass', () => {
+  it('matches invoice with order ID in transaction description', async () => {
+    const results = await orderIdPass.run({
+      invoices: [{ id: 'inv-1', invoiceNumber: 'ORD-123456', grossAmount: 50000 }],
+      transactions: [{ id: 'tx-1', amount: -50000, description: 'Zaplata ORD-123456' }],
+      alreadyMatched: [],
+    })
+
+    expect(results).toHaveLength(1)
+    expect(results[0].confidence).toBe(88)
+  })
+})
+```

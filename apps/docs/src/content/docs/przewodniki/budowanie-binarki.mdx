@@ -1,0 +1,201 @@
+---
+title: Budowanie binarki CLI
+description: Jak zbudować samodzielną binarkę CLI z ksefnik.
+---
+
+import { Tabs, TabItem, Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components';
+
+Ksefnik CLI można skompilować do samodzielnej binarki — jednego pliku wykonywalnego, który nie wymaga Node.js, pnpm ani żadnych zależności. Idealny do wdrażania na serwerach CI, przekazywania współpracownikom i automatyzacji.
+
+## Co daje binarny build?
+
+<CardGrid>
+  <Card title="Zero zależności" icon="approve-check">
+    Jeden plik. Nie potrzebujesz Node.js, pnpm ani npm na docelowej maszynie.
+  </Card>
+  <Card title="Szybki start" icon="rocket">
+    Binarka startuje szybciej niż `npx` czy `pnpm dlx` — bez resolving zależności.
+  </Card>
+  <Card title="Prosta dystrybucja" icon="document">
+    Kopiujesz plik na serwer i uruchamiasz. Bez instalacji, bez konfiguracji.
+  </Card>
+  <Card title="Powtarzalność" icon="puzzle">
+    Dokładnie ta sama wersja na każdej maszynie. Brak ryzyka "u mnie działa".
+  </Card>
+</CardGrid>
+
+## Wymaganie: Bun
+
+Binarny build wymaga runtime [Bun](https://bun.sh), który kompiluje TypeScript do samodzielnego pliku wykonywalnego.
+
+```bash
+# Instalacja Bun (macOS / Linux)
+curl -fsSL https://bun.sh/install | bash
+
+# Sprawdź wersję
+bun --version
+```
+
+<Aside type="note">
+  Bun jest potrzebny tylko do **budowania** binarki. Wynikowy plik wykonywalny nie wymaga Bun na docelowej maszynie.
+</Aside>
+
+## Budowanie binarki
+
+<Steps>
+  1. Sklonuj repozytorium i zainstaluj zależności:
+     ```bash
+     git clone https://github.com/CodeFormers-it/ksefnik.git
+     cd ksefnik
+     pnpm install
+     ```
+
+  2. Zbuduj wszystkie pakiety:
+     ```bash
+     pnpm build
+     ```
+
+  3. Skompiluj binarkę:
+     ```bash
+     bun run apps/build/build.ts
+     ```
+
+  4. Wynik znajdziesz w katalogu `dist-bin/`:
+     ```bash
+     ls -lh dist-bin/
+     # -rwxr-xr-x  1 user  staff  45M  ksefnik
+     ```
+</Steps>
+
+## Użycie binarki
+
+Binarka ma identyczny interfejs jak `ksefnik` uruchamiany przez pnpm:
+
+```bash
+# Sprawdź wersję
+./dist-bin/ksefnik --version
+
+# Pomoc
+./dist-bin/ksefnik --help
+
+# Pobierz faktury
+./dist-bin/ksefnik fetch --from 2026-03-01 --to 2026-03-31
+
+# Import wyciągu
+./dist-bin/ksefnik bank import ./wyciag-marzec.csv
+
+# Uzgadnianie
+./dist-bin/ksefnik reconcile --from 2026-03-01 --to 2026-03-31 \
+  --bank ./wyciag-marzec.csv --format table
+
+# Walidacja
+./dist-bin/ksefnik validate ./faktury.json
+```
+
+## Zmienne środowiskowe
+
+Binarka odczytuje konfigurację ze zmiennych środowiskowych:
+
+```bash
+# Konfiguracja tokena KSeF
+export KSEF_TOKEN="twoj-token-ksef"
+export KSEF_NIP="5213456784"
+export KSEF_ENV="production"  # lub "test"
+
+./dist-bin/ksefnik fetch --from 2026-03-01 --to 2026-03-31
+```
+
+Możesz też użyć pliku `.env`:
+
+```bash
+# .env
+KSEF_TOKEN=twoj-token-ksef
+KSEF_NIP=5213456784
+KSEF_ENV=production
+```
+
+## Budowanie na różne platformy
+
+Bun generuje binarkę dla bieżącej platformy. Aby zbudować na inne systemy, użyj flagi `--target`:
+
+```bash
+# macOS (Apple Silicon)
+bun build apps/build/build.ts --compile --target=bun-darwin-arm64 --outfile dist-bin/ksefnik-macos-arm64
+
+# macOS (Intel)
+bun build apps/build/build.ts --compile --target=bun-darwin-x64 --outfile dist-bin/ksefnik-macos-x64
+
+# Linux (x64)
+bun build apps/build/build.ts --compile --target=bun-linux-x64 --outfile dist-bin/ksefnik-linux-x64
+
+# Linux (ARM)
+bun build apps/build/build.ts --compile --target=bun-linux-arm64 --outfile dist-bin/ksefnik-linux-arm64
+```
+
+<Aside type="caution">
+  Cross-compilation Bun wymaga odpowiedniego toolchain'u. Najprościej budować binarkę na docelowej platformie lub w kontenerze Docker.
+</Aside>
+
+## Dystrybucja
+
+### Kopiowanie na serwer
+
+```bash
+# Skopiuj binarkę na serwer
+scp dist-bin/ksefnik-linux-x64 user@server:/usr/local/bin/ksefnik
+
+# Na serwerze — nadaj uprawnienia i uruchom
+ssh user@server
+chmod +x /usr/local/bin/ksefnik
+ksefnik --version
+```
+
+### Obraz Docker
+
+```dockerfile
+FROM debian:bookworm-slim
+COPY dist-bin/ksefnik-linux-x64 /usr/local/bin/ksefnik
+RUN chmod +x /usr/local/bin/ksefnik
+ENTRYPOINT ["ksefnik"]
+```
+
+```bash
+docker build -t ksefnik .
+docker run --rm ksefnik --version
+```
+
+## Przykład: DevOps w pipeline CI
+
+<Steps>
+  1. W repozytorium CI umieść binarkę `ksefnik-linux-x64` jako artefakt lub pobierz ją z GitHub Releases.
+  2. Dodaj krok w pipeline:
+     ```bash
+     # .github/workflows/reconcile.yml
+     - name: Uzgadnianie faktur
+       env:
+         KSEF_TOKEN: ${{ secrets.KSEF_TOKEN }}
+         KSEF_NIP: "5213456784"
+       run: |
+         chmod +x ./ksefnik-linux-x64
+         ./ksefnik-linux-x64 reconcile \
+           --from $(date -d '1 month ago' +%Y-%m-01) \
+           --to $(date +%Y-%m-01) \
+           --bank ./wyciag.csv \
+           --format json > raport.json
+     ```
+  3. Raport JSON jest dostępny jako artefakt pipeline'u.
+  4. Opcjonalnie: dodaj krok sprawdzający match rate i fail'ujący pipeline przy wartości poniżej progu.
+     ```bash
+     - name: Sprawdź match rate
+       run: |
+         MATCH_RATE=$(jq '.summary.matchRate' raport.json)
+         if (( $(echo "$MATCH_RATE < 0.8" | bc -l) )); then
+           echo "Match rate ${MATCH_RATE} poniżej progu 80%!"
+           exit 1
+         fi
+     ```
+</Steps>
+
+<Aside type="tip">
+  Binarka jest samowystarczalna — nie musisz instalować Node.js, pnpm ani żadnych zależności w obrazie CI. To znacząco przyspiesza pipeline.
+</Aside>

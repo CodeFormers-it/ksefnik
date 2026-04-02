@@ -1,0 +1,144 @@
+---
+title: Import wyciągu bankowego
+description: Jak importować wyciągi bankowe do ksefnik.
+---
+
+import { Tabs, TabItem, Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components';
+
+Moduł `bank` obsługuje import wyciągów bankowych z 5 formatów polskich banków. Automatycznie wykrywa format pliku, parsuje kwoty na grosze i wyciąga NIP-y z tytułów przelewów.
+
+## Obsługiwane formaty
+
+| Bank | Format | Separator | Kodowanie | Rozszerzenie |
+|------|--------|-----------|-----------|--------------|
+| mBank | CSV | `;` | Windows-1250 | `.csv` |
+| ING Bank Śląski | CSV | `;` | UTF-8 | `.csv` |
+| PKO BP (iPKO) | CSV | `,` | UTF-8 | `.csv` |
+| Santander | CSV | `;` | Windows-1250 | `.csv` |
+| Dowolny | MT940 (SWIFT) | — | ASCII | `.mt940`, `.sta` |
+
+<Aside type="tip">
+  Nie musisz podawać typu pliku. Ksefnik analizuje nagłówki i strukturę pliku, żeby automatycznie rozpoznać format.
+</Aside>
+
+## Import wyciągu
+
+<Tabs>
+  <TabItem label="SDK">
+    ```typescript
+    import { createKsefnik } from '@ksefnik/core';
+
+    const ksef = createKsefnik({
+      config: { nip: '5213456784' },
+    });
+
+    // Import z pliku na dysku
+    const transactions = await ksef.bank.importStatement('./wyciag-marzec.csv');
+
+    console.log(`Zaimportowano ${transactions.length} transakcji`);
+
+    for (const tx of transactions) {
+      console.log(
+        `${tx.date} | ${tx.amount > 0 ? 'IN' : 'OUT'} | ${tx.amount} gr | ${tx.title}`
+      );
+    }
+    ```
+
+    Możesz też zaimportować z ciągu znaków (przydatne gdy dane przychodzą z API):
+
+    ```typescript
+    const csvContent = await fetch('https://example.com/wyciag.csv').then(r => r.text());
+
+    const transactions = await ksef.bank.importStatementFromString(csvContent);
+    ```
+  </TabItem>
+  <TabItem label="CLI">
+    ```bash
+    # Import wyciągu — auto-detekcja formatu
+    ksefnik bank import ./wyciag-marzec.csv
+
+    # Wyświetl jako tabelę
+    ksefnik bank import ./wyciag-marzec.csv --format table
+
+    # Zapisz sparsowane transakcje jako JSON
+    ksefnik bank import ./wyciag-marzec.csv --format json > transakcje.json
+
+    # Import wyciągu MT940
+    ksefnik bank import ./wyciag.mt940
+    ```
+  </TabItem>
+</Tabs>
+
+## Auto-detekcja formatu
+
+Parser analizuje plik w trzech krokach:
+
+<Steps>
+  1. **Rozszerzenie** — pliki `.mt940` i `.sta` trafiają od razu do parsera MT940.
+  2. **Nagłówki CSV** — parser porównuje pierwszą linię z znanymi schematami nagłówków banków.
+  3. **Heurystyka** — jeśli nagłówki nie pasują, parser analizuje separatory, kodowanie i strukturę kolumn.
+</Steps>
+
+Jeśli auto-detekcja zawiedzie, możesz wymusić format:
+
+```typescript
+const transactions = await ksef.bank.importStatement('./wyciag.csv', {
+  parser: 'mbank',
+});
+```
+
+## Ekstrakcja NIP z tytułów przelewów
+
+Ksefnik stosuje 3 strategie ekstrakcji NIP z tytułu przelewu (w kolejności priorytetów):
+
+| Strategia | Wzorzec | Przykład tytułu |
+|-----------|---------|-----------------|
+| **MPP (split payment)** | `/VAT/...NIP/1234563218` | `/VAT/230,00/IDC/FV/2026/03/15/NIP/1234563218` |
+| **Prefiks NIP** | `NIP: 1234563218` lub `NIP 1234563218` | `Zapłata za FV/2026/03/15 NIP: 1234563218` |
+| **Surowy checksum** | 10-cyfrowy ciąg z poprawną sumą kontrolną | `Przelew za usługi 1234563218 marzec` |
+
+```typescript
+const transactions = await ksef.bank.importStatement('./wyciag.csv');
+
+// Sprawdź, ile transakcji ma wykryty NIP
+const withNip = transactions.filter(tx => tx.extractedNip);
+console.log(`NIP wykryty w ${withNip.length}/${transactions.length} transakcjach`);
+```
+
+<Aside type="note">
+  Strategia "surowy checksum" może dać fałszywe dopasowania (np. numer rachunku bankowego spełniający checksum NIP). Dlatego ma najniższy priorytet i jest używana tylko gdy pozostałe strategie nie znalazły wyniku.
+</Aside>
+
+## Parsowanie kwot
+
+Wszystkie kwoty są konwertowane na **grosze** (liczby całkowite):
+
+| Wartość w pliku | Wynik w `tx.amount` | Kierunek |
+|-----------------|---------------------|----------|
+| `1 234,56` | `123456` | przychodzący |
+| `-1 234,56` | `-123456` | wychodzący |
+| `0,01` | `1` | przychodzący |
+
+```typescript
+for (const tx of transactions) {
+  const zlote = (Math.abs(tx.amount) / 100).toFixed(2);
+  const kierunek = tx.amount > 0 ? 'przychodzący' : 'wychodzący';
+  console.log(`${zlote} PLN (${kierunek})`);
+}
+```
+
+<Aside type="caution">
+  Nigdy nie używaj `float` do operacji na kwotach. Ksefnik przechowuje wszystko w groszach jako `number` (integer), żeby uniknąć błędów zaokrągleń.
+</Aside>
+
+## Przykład: import wyciągu z mBanku za marzec
+
+<Steps>
+  1. Zaloguj się do mBanku i pobierz wyciąg za marzec 2026 w formacie CSV.
+  2. Uruchom import:
+     ```bash
+     ksefnik bank import ./mbank-marzec-2026.csv --format table
+     ```
+  3. Przejrzyj wynik — każda transakcja ma datę, kwotę w groszach, tytuł i (opcjonalnie) wykryty NIP.
+  4. Następny krok: [uzgadnianie faktur z przelewami](/przewodniki/uzgadnianie/).
+</Steps>

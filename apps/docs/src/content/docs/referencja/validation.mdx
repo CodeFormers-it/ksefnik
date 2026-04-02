@@ -1,0 +1,116 @@
+---
+title: "Namespace: validation"
+description: Dokumentacja namespace validation — walidacja faktur za pomocą 20 wbudowanych reguł.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components'
+
+Namespace `validation` sprawdza faktury pod kątem poprawności za pomocą 20 wbudowanych reguł walidacji.
+
+## validate()
+
+Waliduje listę faktur. Zwraca raport dla każdej faktury.
+
+```typescript
+validate(invoices: Invoice[]): ValidationReport[]
+```
+
+<Aside>
+  Metoda jest synchroniczna (nie zwraca Promise). Nie wymaga adaptera ani storage.
+</Aside>
+
+### ValidationReport
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `invoice` | `Invoice` | Walidowana faktura |
+| `results` | `ValidationResult[]` | Wyniki poszczególnych reguł |
+| `valid` | `boolean` | `true` jeśli wszystkie reguły przeszły |
+
+### ValidationResult
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `valid` | `boolean` | Czy reguła przeszła |
+| `rule` | `string` | Nazwa reguły |
+| `field` | `string?` | Pole, którego dotyczy błąd |
+| `message` | `string?` | Opis błędu |
+| `value` | `unknown?` | Wartość, która nie przeszła walidacji |
+
+## Wbudowane reguły (20)
+
+| Reguła | Kategoria | Opis |
+|--------|-----------|------|
+| `required-fields` | Pola | Wymagane pola: `invoiceNumber`, `sellerNIP`, `grossAmount`, `issueDate` |
+| `nip-format` | NIP | Sprzedawca: 10 cyfr z poprawną sumą kontrolną |
+| `buyer-nip-format` | NIP | Nabywca (jeśli podany): 10 cyfr z poprawną sumą kontrolną |
+| `nip-not-zeros` | NIP | NIP nie może składać się z samych zer |
+| `amount-positive` | Kwoty | `grossAmount` musi być > 0 |
+| `amount-max` | Kwoty | `grossAmount` nie przekracza limitu (10 mld groszy) |
+| `date-valid` | Daty | `issueDate` w poprawnym formacie ISO |
+| `date-not-future` | Daty | `issueDate` nie jest z przyszłości |
+| `date-order` | Daty | Chronologiczna kolejność dat (sprzedaż, wystawienie, termin) |
+| `date-range` | Daty | Daty w rozsądnym zakresie (nie starsze niż 10 lat) |
+| `vat-rate-valid` | VAT | Stawka VAT: 0, 5, 8 lub 23 |
+| `vat-calculation` | VAT | Jeśli `netAmount` i `vatAmount` podane: `netAmount + vatAmount = grossAmount` |
+| `invoice-number-format` | Numer | Numer faktury nie jest pusty i ma rozsądny format |
+| `duplicate-check` | Duplikaty | Brak duplikatów w zestawie (ten sam numer + NIP sprzedawcy) |
+| `currency-valid` | Waluta | Waluta = `PLN` |
+| `line-items-sum` | Pozycje | Suma `netAmount` pozycji = `netAmount` faktury |
+| `seller-buyer-different` | NIP | NIP sprzedawcy != NIP nabywcy |
+| `quantity-positive` | Pozycje | Ilość na pozycjach > 0 |
+| `description-length` | Tekst | Opis pozycji nie przekracza 256 znaków |
+| `ksef-reference-format` | KSeF | Referencja KSeF (jeśli podana) ma poprawny format |
+
+## Przykład
+
+```typescript
+const reports = ksefnik.validation.validate(invoices)
+
+for (const report of reports) {
+  if (report.valid) {
+    console.log(`OK: ${report.invoice.invoiceNumber}`)
+    continue
+  }
+
+  console.log(`BŁĄD: ${report.invoice.invoiceNumber}`)
+  for (const result of report.results.filter((r) => !r.valid)) {
+    console.log(`  [${result.rule}] ${result.field}: ${result.message}`)
+  }
+}
+```
+
+## Podsumowanie walidacji
+
+```typescript
+const reports = ksefnik.validation.validate(invoices)
+
+const valid = reports.filter((r) => r.valid)
+const invalid = reports.filter((r) => !r.valid)
+
+console.log(`Poprawne: ${valid.length} / ${reports.length}`)
+console.log(`Błędne: ${invalid.length} / ${reports.length}`)
+
+// Najczęstsze błędy
+const errorCounts = new Map<string, number>()
+for (const report of invalid) {
+  for (const result of report.results.filter((r) => !r.valid)) {
+    errorCounts.set(result.rule, (errorCounts.get(result.rule) ?? 0) + 1)
+  }
+}
+
+for (const [rule, count] of [...errorCounts].sort((a, b) => b[1] - a[1])) {
+  console.log(`  ${rule}: ${count} wystąpień`)
+}
+```
+
+## Kontekst walidacji
+
+Wewnętrznie silnik tworzy `ValidationContext` z dostępem do pełnej listy faktur (potrzebny np. dla reguły `duplicate-check`) i aktualnej daty (`date-not-future`).
+
+```typescript
+interface ValidationContext {
+  allInvoices?: Invoice[]  // Pełna lista — dla sprawdzania duplikatów
+  now?: Date               // Bieżąca data — dla sprawdzania dat przyszłych
+}
+```

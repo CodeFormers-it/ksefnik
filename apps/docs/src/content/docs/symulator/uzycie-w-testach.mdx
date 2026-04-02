@@ -1,0 +1,117 @@
+---
+title: Użycie symulatora w testach
+description: Jak używać symulatora KSeF w testach jednostkowych i integracyjnych.
+---
+
+import { Tabs, TabItem, Aside, Steps } from '@astrojs/starlight/components'
+
+Symulator KSeF pozwala testować integracje bez połączenia z prawdziwym API. Tworzy lokalny adapter z kontrolowanym zachowaniem i wbudowanym magazynem faktur.
+
+<Aside type="tip">
+Symulator nie wymaga połączenia z internetem. Wszystkie operacje wykonywane są lokalnie w pamięci.
+</Aside>
+
+## Tworzenie symulatora
+
+```ts
+import { createKsefSimulator } from '@ksefnik/simulator'
+
+const { adapter, store } = createKsefSimulator({
+  scenario: 'happy-path',
+  invoices: [
+    {
+      ksefReference: 'KSeF-1234567890',
+      invoiceNumber: 'FV/2026/03/001',
+      sellerNip: '1234567890',
+      buyerNip: '0987654321',
+      netAmount: 100000, // 1000.00 PLN w groszach
+      grossAmount: 123000,
+      issueDate: '2026-03-15',
+    },
+  ],
+})
+```
+
+Parametr `scenario` decyduje o zachowaniu adaptera (np. sukces, timeout, błędy). Parametr `invoices` pozwala na wstępne zasilenie magazynu danymi.
+
+## Użycie z createKsefnik
+
+Przekaż adapter z symulatora zamiast prawdziwego adaptera KSeF:
+
+```ts
+import { createKsefnik } from '@ksefnik/core'
+
+const ksefnik = createKsefnik({
+  nip: '1234567890',
+  adapter: adapter, // adapter z symulatora
+})
+```
+
+## InvoiceStore
+
+Obiekt `store` daje pełną kontrolę nad danymi w symulatorze:
+
+| Metoda | Opis |
+|--------|------|
+| `store.seed(invoices)` | Załaduj tablicę faktur |
+| `store.add(invoice)` | Dodaj pojedynczą fakturę |
+| `store.getAll()` | Pobierz wszystkie faktury |
+| `store.getByDateRange(from, to)` | Filtruj po zakresie dat |
+| `store.clear()` | Wyczyść wszystkie dane |
+
+## Przykład z Vitest
+
+<Steps>
+1. Utwórz symulator w `beforeEach`
+2. Zasilij dane testowe
+3. Wykonaj operację na `ksefnik`
+4. Zweryfikuj wynik
+</Steps>
+
+```ts
+import { describe, it, expect, beforeEach } from 'vitest'
+import { createKsefSimulator } from '@ksefnik/simulator'
+import { createKsefnik } from '@ksefnik/core'
+
+describe('reconciliation', () => {
+  let ksefnik: ReturnType<typeof createKsefnik>
+  let store: ReturnType<typeof createKsefSimulator>['store']
+
+  beforeEach(() => {
+    const sim = createKsefSimulator({ scenario: 'happy-path' })
+    store = sim.store
+    ksefnik = createKsefnik({
+      nip: '1234567890',
+      adapter: sim.adapter,
+    })
+
+    store.seed([
+      {
+        ksefReference: 'KSeF-001',
+        invoiceNumber: 'FV/2026/03/001',
+        sellerNip: '1234567890',
+        buyerNip: '0987654321',
+        netAmount: 100000,
+        grossAmount: 123000,
+        issueDate: '2026-03-15',
+      },
+    ])
+  })
+
+  it('powinien dopasować fakturę do transakcji bankowej', async () => {
+    await ksefnik.invoices.sync({
+      dateFrom: '2026-03-01',
+      dateTo: '2026-03-31',
+    })
+
+    const report = await ksefnik.reconciliation.run()
+
+    expect(report.summary.matched).toBe(1)
+    expect(report.matches[0].confidence).toBeGreaterThan(0.8)
+  })
+})
+```
+
+<Aside>
+Każdy scenariusz symulatora opisany jest na osobnej stronie -- wybierz odpowiedni do testowanego przypadku.
+</Aside>

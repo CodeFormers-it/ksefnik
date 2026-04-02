@@ -1,0 +1,163 @@
+---
+title: Pobieranie faktur z KSeF
+description: Jak pobierać faktury z Krajowego Systemu e-Faktur przy użyciu ksefnik.
+---
+
+import { Tabs, TabItem, Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components';
+
+Moduł `invoices` pozwala pobierać faktury z KSeF API za wybrany okres, filtrować je po NIP kontrahenta i przetwarzać wyniki w kodzie lub z poziomu terminala.
+
+## Kiedy używać
+
+Używaj tego modułu, gdy:
+- masz dostęp do KSeF API (token autoryzacyjny) i chcesz pobrać faktury za dany okres,
+- chcesz zautomatyzować pobieranie faktur w cyklu miesięcznym,
+- przygotowujesz dane do uzgadniania z wyciągiem bankowym.
+
+## Wymagania
+
+- **Produkcja** — adapter KSeF z tokenem autoryzacyjnym (`KsefAdapter`)
+- **Testy / rozwój** — symulator offline (`@ksefnik/simulator`) — nie wymaga dostępu do internetu
+
+<Aside type="tip">
+  Zacznij od symulatora. Pozwala pracować offline i generuje realistyczne dane testowe bez ryzyka wysyłania zapytań do prawdziwego KSeF.
+</Aside>
+
+## Pobieranie faktur
+
+<Tabs>
+  <TabItem label="SDK">
+    ```typescript
+    import { createKsefnik } from '@ksefnik/core';
+    import { KsefAdapter } from '@ksefnik/core/adapters';
+
+    const ksef = createKsefnik({
+      config: {
+        nip: '5213456784',
+        environment: 'production',
+      },
+      adapter: new KsefAdapter({
+        token: process.env.KSEF_TOKEN!,
+      }),
+    });
+
+    // Pobierz faktury za marzec 2026
+    const invoices = await ksef.invoices.fetch({
+      from: '2026-03-01',
+      to: '2026-03-31',
+    });
+
+    console.log(`Pobrano ${invoices.length} faktur`);
+
+    for (const inv of invoices) {
+      console.log(`${inv.number} | ${inv.sellerNip} → ${inv.buyerNip} | ${inv.grossAmount} gr`);
+    }
+    ```
+  </TabItem>
+  <TabItem label="CLI">
+    ```bash
+    # Pobierz faktury za marzec 2026 w formie tabeli
+    ksefnik fetch --from 2026-03-01 --to 2026-03-31 --format table
+
+    # Zapisz do pliku JSON
+    ksefnik fetch --from 2026-03-01 --to 2026-03-31 --format json > faktury-marzec.json
+
+    # Pobierz tylko faktury od konkretnego kontrahenta
+    ksefnik fetch --from 2026-03-01 --to 2026-03-31 --nip 7740001454
+    ```
+  </TabItem>
+</Tabs>
+
+## Filtrowanie po NIP
+
+Możesz ograniczyć wyniki do faktur od/do konkretnego kontrahenta:
+
+```typescript
+// Tylko faktury od dostawcy o NIP 7740001454
+const filtered = await ksef.invoices.fetch({
+  from: '2026-03-01',
+  to: '2026-03-31',
+  counterpartyNip: '7740001454',
+});
+```
+
+## Paginacja
+
+KSeF API zwraca wyniki stronami. SDK obsługuje paginację automatycznie — iteruje po wszystkich stronach i zwraca pełną listę. Jeśli chcesz kontrolować paginację ręcznie:
+
+```typescript
+const page1 = await ksef.invoices.fetch({
+  from: '2026-03-01',
+  to: '2026-03-31',
+  pageSize: 50,
+  pageOffset: 0,
+});
+
+const page2 = await ksef.invoices.fetch({
+  from: '2026-03-01',
+  to: '2026-03-31',
+  pageSize: 50,
+  pageOffset: 50,
+});
+```
+
+## Obsługa błędów
+
+SDK rzuca typowane wyjątki, które pozwalają precyzyjnie reagować na problemy:
+
+```typescript
+import { KsefApiError, KsefTimeoutError } from '@ksefnik/core/errors';
+
+try {
+  const invoices = await ksef.invoices.fetch({
+    from: '2026-03-01',
+    to: '2026-03-31',
+  });
+} catch (error) {
+  if (error instanceof KsefTimeoutError) {
+    console.error('KSeF nie odpowiedział w wymaganym czasie. Spróbuj ponownie.');
+  } else if (error instanceof KsefApiError) {
+    console.error(`Błąd KSeF API: ${error.code} — ${error.message}`);
+  } else {
+    throw error;
+  }
+}
+```
+
+<Aside type="caution">
+  Token KSeF ma ograniczony czas ważności. Jeśli dostajesz `KsefApiError` z kodem `401`, wygeneruj nowy token autoryzacyjny.
+</Aside>
+
+## Użycie z symulatorem
+
+Do testów i rozwoju lokalnego użyj symulatora zamiast prawdziwego API:
+
+```typescript
+import { createKsefnik } from '@ksefnik/core';
+import { SimulatorAdapter } from '@ksefnik/simulator';
+
+const ksef = createKsefnik({
+  config: {
+    nip: '5213456784',
+    environment: 'test',
+  },
+  adapter: new SimulatorAdapter({
+    invoiceCount: 50, // wygeneruj 50 losowych faktur
+    dateRange: { from: '2026-03-01', to: '2026-03-31' },
+  }),
+});
+
+const invoices = await ksef.invoices.fetch({
+  from: '2026-03-01',
+  to: '2026-03-31',
+});
+```
+
+## Przykład: biuro rachunkowe pobiera faktury klienta
+
+<Steps>
+  1. Biuro rachunkowe konfiguruje ksefnik z tokenem klienta (NIP `5213456784`).
+  2. Uruchamia `ksefnik fetch --from 2026-03-01 --to 2026-03-31 --format json > klient-marzec.json`.
+  3. Plik JSON zawiera wszystkie faktury klienta za marzec — gotowe do uzgodnienia z wyciągiem bankowym.
+  4. Następny krok: [import wyciągu bankowego](/przewodniki/import-wyciagu/) i [uzgadnianie](/przewodniki/uzgadnianie/).
+</Steps>

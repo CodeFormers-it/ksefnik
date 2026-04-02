@@ -1,0 +1,92 @@
+---
+title: Tryb interaktywny
+description: Prowadzone uzgadnianie faktur z podpowiedziami w terminalu.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components'
+
+Tryb interaktywny prowadzi użytkownika krok po kroku przez proces uzgadniania faktur z przelewami bankowymi. Wykorzystuje `@clack/prompts` do wyświetlania czytelnych podpowiedzi w terminalu.
+
+## Uruchomienie
+
+```bash
+ksefnik
+# lub
+ksefnik --interactive
+```
+
+Uruchomienie bez komendy automatycznie włącza tryb interaktywny.
+
+## Przebieg
+
+<Steps>
+1. **Ścieżka do wyciągu** -- wybierz plik z wyciągiem bankowym
+2. **NIP podmiotu** -- podaj NIP lub potwierdź z konfiguracji
+3. **Zakres dat** -- potwierdź lub zmień wykryty zakres
+4. **Import** -- automatyczny import i podsumowanie transakcji
+5. **Uzgadnianie** -- uruchomienie silnika dopasowań
+6. **Wynik** -- podsumowanie z możliwością eksportu
+</Steps>
+
+## Przykład sesji
+
+```
+┌  ksefnik -- uzgadnianie faktur KSeF
+│
+◇  Ścieżka do wyciągu bankowego
+│  ./wyciag-mbank-03-2026.csv
+│
+◇  NIP podmiotu
+│  1234567890
+│
+◇  Wykryto zakres dat: 2026-03-01 — 2026-03-31
+│  Kontynuować z tym zakresem? (T/n)
+│  T
+│
+◆  Importowanie wyciągu...
+│  Wykryto format: mBank CSV
+│  Zaimportowano: 47 transakcji
+│
+◆  Pobieranie faktur z KSeF...
+│  Pobrano: 12 faktur
+│
+◆  Uzgadnianie...
+│  Pass 1 (KSeF ref): 2 dopasowania
+│  Pass 2 (exact NIP): 5 dopasowań
+│  Pass 3 (invoice ref): 1 dopasowanie
+│  Pass 4 (fuzzy): 2 dopasowania
+│
+◇  Raport uzgodnienia
+│  Dopasowane: 10/12 faktur (83%)
+│  Średnia pewność: 0.92
+│
+◇  Eksportować raport? (T/n)
+│  T → raport-2026-03.json
+│
+└  Gotowe!
+```
+
+## Funkcja guidedReconcile
+
+Pod spodem tryb interaktywny wywołuje funkcję `guidedReconcile()` z `@ksefnik/cli`:
+
+```ts
+import { guidedReconcile } from '@ksefnik/cli'
+
+// Uruchom programowo (np. w skrypcie)
+await guidedReconcile({
+  nip: '1234567890',
+  token: 'eyJhbGciOi...',
+  env: 'demo',
+})
+```
+
+## Kiedy używać
+
+- Jednorazowe uzgodnienie bez pisania kodu
+- Szybkie sprawdzenie dopasowań na nowym wyciągu
+- Prezentacje i onboarding nowych użytkowników
+
+<Aside type="tip">
+Tryb interaktywny jest wygodny do jednorazowych operacji. Do automatyzacji i integracji w pipeline'ach używaj komend z flagami.
+</Aside>

@@ -1,0 +1,126 @@
+---
+title: Reguły dat
+description: Reguły walidacji dat na fakturach.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Ksefnik zawiera 4 reguły walidujące poprawność dat na fakturach.
+
+## date-valid
+
+Sprawdza, czy data wystawienia jest poprawną datą w formacie ISO (YYYY-MM-DD).
+
+```typescript
+import { dateValidRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `issueDate` | pasuje do `/^\d{4}-\d{2}-\d{2}$/` i jest poprawną datą |
+
+| Data | Wynik | Powód |
+|------|-------|-------|
+| `2026-03-01` | valid | poprawny format i wartość |
+| `2026-02-29` | invalid | 2026 nie jest rokiem przestępnym |
+| `2026/03/01` | invalid | zły separator |
+| `01-03-2026` | invalid | zły porządek (DD-MM-YYYY) |
+| `abc` | invalid | nie jest datą |
+
+## date-not-future
+
+Sprawdza, czy data wystawienia nie jest w przyszłości (z tolerancją 1 dnia).
+
+```typescript
+import { dateNotFutureRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `issueDate` | `<= jutro` (dzisiaj + 1 dzień) |
+
+Tolerancja 1 dnia uwzględnia różnice stref czasowych i faktur wystawianych tuż przed północą.
+
+```typescript
+// Jeśli dziś jest 2026-03-15:
+// 2026-03-15 -> valid  (dziś)
+// 2026-03-16 -> valid  (jutro = tolerancja)
+// 2026-03-17 -> invalid (pojutrze)
+```
+
+<Aside type="tip">
+  Reguła korzysta z `context.now`, jeśli jest podane. Pozwala to na deterministyczne testy bez zależności od daty systemowej.
+</Aside>
+
+## date-order
+
+Sprawdza, czy data płatności (`dueDate`) jest równa lub późniejsza niż data wystawienia.
+
+```typescript
+import { dateOrderRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `dueDate` | `>= issueDate` (jeśli `dueDate` podane) |
+
+| issueDate | dueDate | Wynik |
+|-----------|---------|-------|
+| `2026-03-01` | `2026-03-15` | valid |
+| `2026-03-01` | `2026-03-01` | valid (ten sam dzień) |
+| `2026-03-15` | `2026-03-01` | invalid |
+| `2026-03-01` | (brak) | valid (pomijane) |
+
+<Aside type="note">
+  Reguła pomija sprawdzenie, jeśli `dueDate` nie jest podane -- faktura bez terminu płatności nie generuje błędu.
+</Aside>
+
+## date-range
+
+Sprawdza, czy data wystawienia nie jest starsza niż 10 lat.
+
+```typescript
+import { dateRangeRule } from '@ksefnik/core'
+```
+
+| Pole | Warunek |
+|------|---------|
+| `issueDate` | wiek faktury `<= 10 lat` |
+
+```typescript
+// Jeśli dziś jest 2026-03-15:
+// 2016-03-16 -> valid  (niecałe 10 lat)
+// 2016-03-14 -> invalid (ponad 10 lat)
+// 2026-03-01 -> valid  (2 tygodnie temu)
+```
+
+<Aside type="tip">
+  Reguła jest przydatna do wykrywania błędnie wpisanych dat, np. `2006` zamiast `2026`.
+</Aside>
+
+## Kontekst daty (context.now)
+
+Reguły `date-not-future` i `date-range` korzystają z `context.now`. Domyślnie jest to `new Date()`, ale możesz podać własną datę:
+
+```typescript
+import { validateInvoice, dateNotFutureRule, dateRangeRule } from '@ksefnik/core'
+
+const report = validateInvoice(
+  invoice,
+  [dateNotFutureRule, dateRangeRule],
+  { now: new Date('2026-03-15') },
+)
+```
+
+## Użycie
+
+```typescript
+import { validateInvoice, dateValidRule, dateNotFutureRule,
+         dateOrderRule, dateRangeRule } from '@ksefnik/core'
+
+const dateRules = [dateValidRule, dateNotFutureRule, dateOrderRule, dateRangeRule]
+const report = validateInvoice(invoice, dateRules)
+
+const dateErrors = report.results.filter(r => !r.valid)
+// [{ rule: 'date-not-future', field: 'issueDate', message: 'Issue date cannot be in the future' }]
+```

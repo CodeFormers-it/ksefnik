@@ -1,0 +1,182 @@
+---
+title: Użycie z AI (MCP)
+description: Jak używać ksefnik jako serwera MCP z asystentami AI.
+---
+
+import { Tabs, TabItem, Aside, Steps, Card, CardGrid } from '@astrojs/starlight/components';
+
+Ksefnik działa jako serwer MCP (Model Context Protocol) — standardu komunikacji między asystentami AI a zewnętrznymi narzędziami. Dzięki temu możesz rozmawiać z AI o swoich fakturach i przelewach w języku naturalnym.
+
+## Co to jest MCP?
+
+Model Context Protocol to otwarty standard stworzony przez Anthropic. Definiuje sposób, w jaki asystent AI (np. Claude) może wywoływać narzędzia zewnętrzne — pobierać dane, uruchamiać analizy, wykonywać akcje.
+
+Ksefnik udostępnia swoje funkcje jako narzędzia MCP. Asystent AI sam decyduje, kiedy i które narzędzie wywołać, na podstawie Twojego pytania.
+
+## Dostępne narzędzia
+
+| Narzędzie | Opis | Parametry |
+|-----------|------|-----------|
+| `fetch_invoices` | Pobierz faktury z KSeF za okres | `from`, `to`, `counterpartyNip?` |
+| `import_bank_statement` | Importuj wyciąg bankowy | `filePath` |
+| `reconcile` | Uzgodnij faktury z przelewami | `from`, `to`, `bankStatementPath` |
+| `validate_invoices` | Waliduj faktury | `filePath` lub `invoices` |
+| `get_unmatched_invoices` | Pobierz niesparowane faktury z ostatniego raportu | `reportId?` |
+| `get_unmatched_transactions` | Pobierz niesparowane przelewy | `reportId?` |
+| `get_report_summary` | Pobierz podsumowanie raportu | `reportId` |
+| `search_invoices` | Szukaj faktur po kryteriach | `nip?`, `from?`, `to?`, `amountFrom?`, `amountTo?` |
+
+## Konfiguracja z Claude Desktop
+
+Dodaj konfigurację serwera MCP do pliku `claude_desktop_config.json`:
+
+<Tabs>
+  <TabItem label="macOS">
+    Plik: `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+    ```json
+    {
+      "mcpServers": {
+        "ksefnik": {
+          "command": "npx",
+          "args": ["@ksefnik/mcp", "--stdio"],
+          "env": {
+            "KSEF_TOKEN": "twoj-token-ksef",
+            "KSEF_NIP": "5213456784"
+          }
+        }
+      }
+    }
+    ```
+  </TabItem>
+  <TabItem label="Windows">
+    Plik: `%APPDATA%\Claude\claude_desktop_config.json`
+
+    ```json
+    {
+      "mcpServers": {
+        "ksefnik": {
+          "command": "npx",
+          "args": ["@ksefnik/mcp", "--stdio"],
+          "env": {
+            "KSEF_TOKEN": "twoj-token-ksef",
+            "KSEF_NIP": "5213456784"
+          }
+        }
+      }
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+Po zapisaniu pliku zrestartuj Claude Desktop. Ksefnik powinien pojawić się na liście dostępnych narzędzi (ikona w prawym dolnym rogu okna czatu).
+
+## Konfiguracja z Cursor
+
+Dodaj do `.cursor/mcp.json` w katalogu projektu:
+
+```json
+{
+  "mcpServers": {
+    "ksefnik": {
+      "command": "npx",
+      "args": ["@ksefnik/mcp", "--stdio"],
+      "env": {
+        "KSEF_TOKEN": "twoj-token-ksef",
+        "KSEF_NIP": "5213456784"
+      }
+    }
+  }
+}
+```
+
+<Aside type="tip">
+  Dla rozwoju lokalnego użyj symulatora zamiast prawdziwego tokena KSeF:
+  ```json
+  {
+    "mcpServers": {
+      "ksefnik": {
+        "command": "npx",
+        "args": ["@ksefnik/mcp", "--stdio", "--simulator"],
+        "env": {
+          "KSEF_NIP": "5213456784"
+        }
+      }
+    }
+  }
+  ```
+</Aside>
+
+## Konfiguracja z Claude Code
+
+```json
+{
+  "mcpServers": {
+    "ksefnik": {
+      "command": "npx",
+      "args": ["@ksefnik/mcp", "--stdio"],
+      "env": {
+        "KSEF_TOKEN": "twoj-token-ksef",
+        "KSEF_NIP": "5213456784"
+      }
+    }
+  }
+}
+```
+
+## Przykładowe prompty
+
+### Podstawowe operacje
+
+- _"Pobierz faktury za marzec 2026 i pokaż podsumowanie"_
+- _"Zaimportuj wyciąg bankowy z pliku wyciag-marzec.csv"_
+- _"Uruchom uzgadnianie za marzec z wyciągiem z mBanku"_
+
+### Analiza danych
+
+- _"Które faktury z marca nie mają przelewu?"_
+- _"Jaka jest łączna kwota niesparowanych faktur?"_
+- _"Pokaż faktury od kontrahenta z NIP 7740001454"_
+- _"Jaki jest match rate za marzec?"_
+
+### Zaawansowane pytania
+
+- _"Porównaj match rate z lutego i marca — czy się poprawił?"_
+- _"Znajdź faktury powyżej 10 000 PLN, które nie zostały opłacone"_
+- _"Które passy reconciliation mają najniższą pewność dopasowania?"_
+- _"Zwaliduj faktury z pliku faktury.json i pokaż tylko błędy NIP"_
+
+## Jak AI korzysta z narzędzi
+
+Gdy zapytasz _"Które faktury nie mają przelewu?"_, AI:
+
+<Steps>
+  1. Rozpoznaje, że potrzebuje danych o niesparowanych fakturach.
+  2. Wywołuje narzędzie `get_unmatched_invoices`.
+  3. Otrzymuje listę faktur z kwotami, NIP-ami i datami.
+  4. Formatuje odpowiedź w czytelny sposób — tabela, podsumowanie, sugestie.
+</Steps>
+
+```typescript
+// Tak wygląda wywołanie narzędzia przez AI (wewnętrznie):
+const result = await mcpServer.callTool('get_unmatched_invoices', {});
+// result: [
+//   { number: 'FV/2026/03/042', buyerNip: '7740001454', grossAmount: 1230000 },
+//   { number: 'FV/2026/03/067', buyerNip: '1234563218', grossAmount: 50000 },
+// ]
+```
+
+<Aside type="note">
+  AI nie wysyła danych do zewnętrznych serwerów. Komunikacja MCP odbywa się lokalnie — między Claude Desktop a procesem ksefnik na Twoim komputerze.
+</Aside>
+
+## Przykład: księgowa sprawdza niesparowane faktury
+
+<Steps>
+  1. Księgowa otwiera Claude Desktop z podłączonym serwerem ksefnik.
+  2. Pisze: _"Zaimportuj wyciąg z pliku ~/Documents/wyciag-marzec.csv i zrób reconciliation za marzec 2026"_.
+  3. Claude wywołuje `import_bank_statement`, potem `reconcile`.
+  4. Księgowa pyta: _"Które faktury nie mają przelewu i jaka jest ich łączna kwota?"_
+  5. Claude wywołuje `get_unmatched_invoices` i odpowiada:
+     _"5 faktur nie ma przelewu. Łączna kwota: 15 430,00 PLN. Największa to FV/2026/03/042 na 12 300,00 PLN od kontrahenta NIP 7740001454."_
+</Steps>

@@ -1,0 +1,152 @@
+---
+title: Kwoty w groszach
+description: Dlaczego ksefnik przechowuje wszystkie kwoty jako liczby całkowite w groszach i jak z nimi pracować.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components'
+
+Wszystkie kwoty w ksefnik (faktury, transakcje bankowe, dopasowania) są przechowywane jako **liczby całkowite w groszach**. To krytyczna konwencja, która eliminuje błędy zaokrągleń.
+
+## Problem: floating point
+
+JavaScript (i TypeScript) używa IEEE 754 double-precision floats. To oznacza:
+
+```typescript
+0.1 + 0.2
+// → 0.30000000000000004 (nie 0.3!)
+
+1230.50 + 769.50
+// → 2000 (akurat OK, ale nie zawsze)
+
+0.1 + 0.2 === 0.3
+// → false
+```
+
+Przy uzgadnianiu faktur z transakcjami bankowymi, nawet minimalna rozbieżność kwot może oznaczać brak dopasowania. Nie możemy sobie na to pozwolić.
+
+## Rozwiązanie: integer w groszach
+
+```
+1 PLN = 100 groszy
+
+1 230,00 PLN → 123000 groszy
+    45,99 PLN →   4599 groszy
+     0,01 PLN →      1 grosz
+```
+
+Operacje na integerach są zawsze dokładne:
+
+```typescript
+// W groszach — zawsze poprawnie
+12300 + 4599
+// → 16899 (dokładnie 168,99 PLN)
+
+// W PLN (float) — ryzyko błędu
+123.00 + 45.99
+// → 168.99 (tu akurat OK, ale nie gwarantowane)
+```
+
+## Schematy Zod
+
+Wszystkie pola kwotowe w schematach wymuszają integer:
+
+```typescript
+// InvoiceSchema
+grossAmount: z.number().int().positive(),   // Kwota brutto w groszach
+netAmount: z.number().int().positive(),     // Kwota netto w groszach
+vatAmount: z.number().int().nonnegative(),  // VAT w groszach
+
+// LineItemSchema
+netAmount: z.number().int().positive(),     // Netto pozycji w groszach
+unitNetPrice: z.number().int(),             // Cena jednostkowa w groszach
+
+// BankTransactionSchema
+amount: z.number().int(),                   // Kwota w groszach (ujemna = wydatek)
+```
+
+<Aside type="caution">
+  Walidacja `z.number().int()` odrzuci wartości z częścią dziesiętną. `123.45` nie przejdzie walidacji — musisz przekonwertować na `12345` groszy przed zapisem.
+</Aside>
+
+## Parsery bankowe — automatyczna konwersja
+
+Parsery bankowe (MT940, mBank, ING, PKO, Santander) automatycznie konwertują kwoty z wyciągów na grosze:
+
+```typescript
+// Parser wewnętrznie robi:
+const amountInGrosze = Math.round(parseFloat(rawAmount) * 100)
+```
+
+Nie musisz sam konwertować — wynik `importFromString()` to już kwoty w groszach.
+
+## Wyświetlanie kwot
+
+Przy wyświetlaniu kwot użytkownikowi, podziel przez 100:
+
+```typescript
+function formatPLN(amountInGrosze: number): string {
+  return (amountInGrosze / 100).toFixed(2) + ' PLN'
+}
+
+formatPLN(123000)  // → "1230.00 PLN"
+formatPLN(4599)    // → "45.99 PLN"
+formatPLN(-50000)  // → "-500.00 PLN"
+```
+
+Z polskim formatowaniem:
+
+```typescript
+function formatPLN(amountInGrosze: number): string {
+  return new Intl.NumberFormat('pl-PL', {
+    style: 'currency',
+    currency: 'PLN',
+  }).format(amountInGrosze / 100)
+}
+
+formatPLN(123000)  // → "1 230,00 zł"
+```
+
+## Konwersja z PLN na grosze
+
+Przy tworzeniu faktur programowo:
+
+```typescript
+function toGrosze(pln: number): number {
+  return Math.round(pln * 100)
+}
+
+const invoice = {
+  grossAmount: toGrosze(1230.00),  // 123000
+  netAmount: toGrosze(1000.00),    // 100000
+  vatAmount: toGrosze(230.00),     // 23000
+}
+```
+
+<Aside>
+  Używaj `Math.round()` zamiast `Math.floor()` lub `Math.ceil()`, żeby uniknąć systematycznego zaokrąglania w jedną stronę.
+</Aside>
+
+## Porównywanie kwot w pipeline
+
+Silnik uzgadniania porównuje kwoty bezwzględne (bo transakcje wychodzące mają ujemne amount):
+
+```typescript
+// Wewnętrznie w passach:
+const invoiceAmount = invoice.grossAmount
+const txAmount = Math.abs(transaction.amount)
+
+if (invoiceAmount === txAmount) {
+  // Exact match
+}
+```
+
+Pass `partial` sumuje kilka transakcji:
+
+```typescript
+const sum = transactions.reduce((acc, tx) => acc + Math.abs(tx.amount), 0)
+if (sum === invoice.grossAmount) {
+  // Partial match — kilka transakcji = jedna faktura
+}
+```
+
+Ponieważ operujemy na integerach, porównanie `===` jest zawsze bezpieczne. Nie ma ryzyka, że `123000 !== 123000.00000001`.

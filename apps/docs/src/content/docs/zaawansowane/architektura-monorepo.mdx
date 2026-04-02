@@ -1,0 +1,149 @@
+---
+title: Architektura monorepo
+description: Opis struktury monorepo ksefnik, organizacji pakietów i zależności między nimi.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components'
+
+Ksefnik jest zorganizowany jako monorepo pnpm workspace z pięcioma pakietami i jedną aplikacją.
+
+## Struktura katalogów
+
+```
+ksefnik/
+├── packages/
+│   ├── shared/        @ksefnik/shared     — Schematy Zod, typy, interfejsy pluginów
+│   ├── core/          @ksefnik/core       — Fasada SDK, silnik uzgadniania, parsery bankowe
+│   ├── simulator/     @ksefnik/simulator  — Offline mock KSeF API
+│   └── mcp/           @ksefnik/mcp        — Serwer MCP (cienka warstwa na core)
+├── apps/
+│   └── cli/           @ksefnik/cli        — CLI (Commander.js) → standalone binary
+├── pnpm-workspace.yaml
+├── package.json
+├── tsconfig.json
+└── vitest.workspace.ts
+```
+
+## Graf zależności
+
+```
+@ksefnik/shared          ← fundament: zero zależności runtime
+    ↑
+@ksefnik/core            ← cała logika biznesowa
+    ↑
+@ksefnik/simulator       ← mock KSeF API (zależy od core)
+@ksefnik/mcp             ← serwer MCP (cienka warstwa na core)
+@ksefnik/cli             ← CLI (Commander.js + @clack/prompts)
+```
+
+Zasada: `shared` nie zależy od niczego. `core` zależy tylko od `shared`. Wszystko inne zależy od `core` (i tym samym od `shared`).
+
+## Pakiety
+
+### @ksefnik/shared
+
+Fundament monorepo. Zawiera:
+
+- **Schematy Zod** — `InvoiceSchema`, `BankTransactionSchema`, `MatchSchema`, `ReconciliationReportSchema`
+- **Interfejsy TypeScript** — `KsefAdapter`, `Storage`, `BankStatementParser`, `ReconciliationPass`, `KsefPlugin`
+- **Klasy błędów** — `KsefnikError` i potomne
+- **Helpery** — `nipSchema`, `isValidNIP`
+
+Zero zależności runtime poza `zod`.
+
+### @ksefnik/core
+
+Cała logika biznesowa. Eksportuje:
+
+- **Fasada `Ksefnik`** z 5 namespace'ami
+- **Funkcja `createKsefnik()`** — punkt wejścia
+- **Silnik uzgadniania** — pipeline z 6 passami
+- **Parsery bankowe** — MT940, mBank, ING, PKO, Santander
+- **Silnik walidacji** — 20 reguł
+- **Storage** — InMemoryStorage, SqliteStorage
+- **System pluginów** — PluginRegistry, loader
+
+### @ksefnik/simulator
+
+Offline mock serwera KSeF z predefiniowanymi scenariuszami:
+
+- `happy-path` — standardowy przebieg
+- `session-expired` — wygaśnięcie sesji
+- `timeout` — timeout API
+- `invalid-nip` — niepoprawny NIP
+- `upo-delay` — opóźnione UPO
+
+### @ksefnik/mcp
+
+Serwer Model Context Protocol. Cienka warstwa na `@ksefnik/core` eksponująca narzędzia AI:
+
+- `sync-invoices`, `query-invoices`, `send-invoice`
+- `import-bank`, `reconcile`, `get-unmatched`
+- `validate-invoice`, `confirm-match`
+
+### @ksefnik/cli
+
+Aplikacja CLI z Commander.js i @clack/prompts. Kompilowana do standalone binary przez `bun build --compile`.
+
+## Komendy deweloperskie
+
+| Komenda | Opis |
+|---------|------|
+| `pnpm build` | Buduje wszystkie pakiety (tsc) |
+| `pnpm test` | Uruchamia Vitest we wszystkich pakietach |
+| `pnpm typecheck` | Type-check wszystkich pakietów |
+| `pnpm dev` | Watch mode dla wszystkich pakietów |
+
+## pnpm-workspace.yaml
+
+```yaml
+packages:
+  - 'packages/*'
+  - 'apps/*'
+```
+
+## TypeScript Project References
+
+Każdy pakiet ma własny `tsconfig.json` z `references` do swoich zależności:
+
+```json
+// packages/core/tsconfig.json
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "references": [
+    { "path": "../shared" }
+  ]
+}
+```
+
+<Aside type="tip">
+  Project references pozwalają na inkrementalną kompilację — zmiana w `shared` przebudowuje tylko `shared` i pakiety, które od niego zależą.
+</Aside>
+
+## Vitest Workspace
+
+```typescript
+// vitest.workspace.ts
+import { defineWorkspace } from 'vitest/config'
+
+export default defineWorkspace([
+  'packages/shared',
+  'packages/core',
+  'packages/simulator',
+  'packages/mcp',
+  'apps/cli',
+])
+```
+
+Każdy pakiet może mieć własny `vitest.config.ts` z indywidualnymi ustawieniami (np. timeouty dla symulatora).
+
+## Konwencje
+
+- **SDK-first** — cała logika w `@ksefnik/core`. CLI, MCP i hosted API to cienkie wrappery.
+- **Zod everywhere** — wszystkie modele domenowe jako schematy Zod, typy generowane przez `z.infer`.
+- **Money as integers** — kwoty w groszach, nigdy float. Szczegóły w [Kwoty w groszach](/zaawansowane/kwoty-w-groszach/).
+- **Adapter pattern** — KSeF API za interfejsem, wymienialny w testach. Szczegóły w [Wzorzec adapter](/zaawansowane/wzorzec-adapter/).

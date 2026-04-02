@@ -1,0 +1,109 @@
+---
+title: ING CSV
+description: Parser formatu CSV z ING Banku Śląskiego w ksefnik.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Parser `IngParser` obsługuje format CSV z ING Banku Śląskiego. Charakterystyczną cechą są nagłówki w cudzysłowach i daty w formacie `YYYYMMDD`.
+
+## Specyfikacja formatu
+
+| Cecha | Wartość |
+|-------|--------|
+| Separator | `;` (średnik) |
+| Kodowanie | UTF-8 (z opcjonalnym BOM) |
+| Format daty | `YYYYMMDD` (np. `20260301`) |
+| Format kwoty | `+15000,00` / `-1230,00` (z leading spaces) |
+| Nagłówki | W cudzysłowach |
+
+## Kolumny
+
+| # | Nagłówek | Mapowanie |
+|---|----------|-----------|
+| 1 | `"Data transakcji"` | `date` (po konwersji) |
+| 2 | `"Data księgowania"` | (pomijane) |
+| 3 | `"Dane kontrahenta"` | `recipientName` / `senderName` |
+| 4 | `"Tytuł"` | `description` |
+| 5-6 | inne kolumny | (pomijane) |
+| 7 | `"Szczegóły"` | ekstrakcja NIP |
+| 8 | (pusta) | (pomijane) |
+| 9 | `"Kwota"` | `amount` (w groszach) |
+
+## Detekcja
+
+```typescript
+content.includes('"Data transakcji"') && content.includes('"Dane kontrahenta"')
+```
+
+## Konwersja daty
+
+ING używa formatu `YYYYMMDD` bez separatorów:
+
+```typescript
+function formatIngDate(yyyymmdd: string): string {
+  // 20260301 -> 2026-03-01
+  return `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`
+}
+```
+
+## Ekstrakcja NIP
+
+NIP jest szukany w trzech polach: `"Dane kontrahenta"`, `"Szczegóły"` i `"Tytuł"`:
+
+```typescript
+const nip = extractFirstNIP(`${counterparty ?? ''} ${details ?? ''} ${description}`)
+```
+
+W kolumnie `"Szczegóły"` ING często umieszcza NIP w formacie `NIPxxxxxxxxxx`.
+
+## Czyszczenie nazwy kontrahenta
+
+ING dopisuje adres firmy do nazwy kontrahenta. Parser odcina suffix zaczynający się od ` UL `:
+
+```typescript
+// "ACME SP Z O O UL MARSZALKOWSKA 1" -> "ACME SP Z O O"
+counterparty?.split(' UL ')[0]?.split(' ul ')[0]
+```
+
+<Aside type="note">
+  Czyszczenie nazwy działa zarówno dla wielkich (`UL`) jak i małych (`ul`) liter.
+</Aside>
+
+## Przykład CSV
+
+```csv
+"Data transakcji";"Data księgowania";"Dane kontrahenta";"Tytuł";"";"";"";"Szczegóły";"";"Kwota"
+20260301;20260301;"ACME SP Z O O UL MARSZALKOWSKA 1";"Faktura FV/2026/03/001";"";"";"";""NIP5213456789";"";"-1230,00"
+20260305;20260305;"BETA SP Z O O";"Zaplata za usluge";"";"";"";"";"";" 5000,00"
+```
+
+## Sparsowany wynik
+
+```typescript
+[
+  {
+    date: '2026-03-01',
+    amount: -123000,
+    description: 'Faktura FV/2026/03/001',
+    recipientName: 'ACME SP Z O O',  // bez "UL MARSZALKOWSKA 1"
+    recipientNIP: '5213456789',
+    bank: 'ing',
+  },
+  {
+    date: '2026-03-05',
+    amount: 500000,
+    description: 'Zaplata za usluge',
+    senderName: 'BETA SP Z O O',
+    bank: 'ing',
+  },
+]
+```
+
+## Użycie
+
+```typescript
+import { importBankStatement } from '@ksefnik/core'
+
+const transactions = await importBankStatement('./ing-wyciag.csv')
+```
