@@ -8,7 +8,8 @@ const githubSvg = '<svg viewBox="0 0 16 16" fill="currentColor" width="1em" heig
 <div class="social-icons-wrapper">
 	<a href="https://codeformers.it/" target="_blank" rel="noopener" class="codeformers-link sl-flex">
 		<span class="codeformers-text">Projekt wspierany przez</span>
-		<img src="/codeformers-logo.png" alt="CodeFormers.it" class="codeformers-img" />
+		<img src="/codeformers-logo.png" alt="CodeFormers.it" class="codeformers-img codeformers-img--dark" />
+		<img src="/codeformers-logo-dark.png" alt="CodeFormers.it" class="codeformers-img codeformers-img--light" />
 	</a>
 	{
 		links.length > 0 && (
@@ -52,6 +53,16 @@ const githubSvg = '<svg viewBox="0 0 16 16" fill="currentColor" width="1em" heig
 		.codeformers-img {
 			height: 18px;
 			width: auto;
+		}
+		/* Dark mode: show light logo, hide dark logo */
+		.codeformers-img--light {
+			display: none;
+		}
+		:root[data-theme='light'] .codeformers-img--dark {
+			display: none;
+		}
+		:root[data-theme='light'] .codeformers-img--light {
+			display: block;
 		}
 		.social-divider {
 			width: 1px;
