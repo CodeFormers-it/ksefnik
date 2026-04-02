@@ -291,9 +291,7 @@ const report = await ksef.reconciliation.run(invoices, txs)
 ## 🤖 MCP (Claude Code)
 
 ```bash
-# Dodaj ksefnik do Claude Code
-claude mcp add ksefnik -- \
-  pnpm dlx tsx packages/cli/src/main.ts mcp --stdio
+claude mcp add ksefnik -- npx @ksefnik/cli mcp --stdio
 ```
 
 ```
