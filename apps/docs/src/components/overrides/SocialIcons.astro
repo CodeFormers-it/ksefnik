@@ -51,12 +51,15 @@ const githubSvg = '<svg viewBox="0 0 16 16" fill="currentColor" width="1em" heig
 			white-space: nowrap;
 		}
 		.codeformers-img {
-			height: 18px;
 			width: auto;
 		}
-		/* Dark mode: show light logo, hide dark logo */
+		/* Dark mode: 26px, show light logo */
+		.codeformers-img--dark {
+			height: 26px;
+		}
 		.codeformers-img--light {
 			display: none;
+			height: 30px;
 		}
 		:root[data-theme='light'] .codeformers-img--dark {
 			display: none;

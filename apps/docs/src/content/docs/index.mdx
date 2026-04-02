@@ -269,21 +269,78 @@ hero:
 
 ## Szybki przykład
 
+<div class="code-columns">
+  <div class="code-col">
+    <div class="code-col__label">⚡ SDK (TypeScript)</div>
+
 ```typescript
 import { createKsefnik } from '@ksefnik/core'
 import { createKsefSimulator } from '@ksefnik/simulator'
 
-// Utwórz symulator z gotowym scenariuszem
-const { adapter } = createKsefSimulator({ scenario: 'happy-path', invoices })
+const { adapter } = createKsefSimulator({
+  scenario: 'happy-path',
+  invoices,
+})
+
 const ksef = createKsefnik({
   config: { nip: '5213456784', environment: 'test' },
   adapter,
 })
 
-// Importuj wyciąg bankowy i uruchom uzgadnianie
-const transactions = await ksef.bank.importFromString(csvContent)
-const report = await ksef.reconciliation.run(invoices, transactions)
-
-console.log(report.summary)
-// { matchedCount: 10, unmatchedInvoices: 2, unmatchedTransactions: 1 }
+const txs = await ksef.bank.importFromString(csv)
+const report = await ksef.reconciliation.run(
+  invoices, txs
+)
+// → matchedCount: 10, confidence: 95%
 ```
+
+  </div>
+  <div class="code-col">
+    <div class="code-col__label">🤖 MCP (Claude / Cursor)</div>
+
+```json
+// 1. Importuj wyciąg bankowy
+{
+  "tool": "import-bank",
+  "input": { "content": "...csv..." }
+}
+// → { "count": 15, "transactions": [...] }
+
+// 2. Uruchom uzgadnianie
+{
+  "tool": "reconcile"
+}
+// → { "matchedCount": 10,
+//      "unmatchedInvoiceCount": 2 }
+
+// 3. Sprawdź niesparowane
+{
+  "tool": "get-unmatched",
+  "input": { "reportId": "abc-123" }
+}
+```
+
+  </div>
+</div>
+
+<style>{`
+  .code-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1.5rem 0;
+    max-width: 52rem;
+  }
+  @media (max-width: 50rem) {
+    .code-columns { grid-template-columns: 1fr; }
+  }
+  .code-col {
+    min-width: 0;
+  }
+  .code-col__label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.02em;
+  }
+`}</style>
