@@ -15,6 +15,9 @@ export default defineConfig({
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/CodeFormers-it/ksefnik' },
       ],
+      components: {
+        SiteTitle: './src/components/overrides/SiteTitle.astro',
+      },
       customCss: ['./src/styles/custom.css'],
       sidebar: [
         { label: 'Wprowadzenie', autogenerate: { directory: 'wprowadzenie' } },
@@ -28,6 +31,7 @@ export default defineConfig({
         { label: 'Serwer MCP', autogenerate: { directory: 'mcp' } },
         { label: 'Referencja API', autogenerate: { directory: 'referencja' } },
         { label: 'Zaawansowane', autogenerate: { directory: 'zaawansowane' } },
+        { label: 'Integracje', autogenerate: { directory: 'integracje' } },
       ],
     }),
     react(),

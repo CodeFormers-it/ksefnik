@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "bash scripts/build-docs.sh",
+    "build:public": "astro build",
     "preview": "astro preview"
   },
   "dependencies": {
