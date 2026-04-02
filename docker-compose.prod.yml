@@ -1,0 +1,18 @@
+name: ksefnik-prod
+
+services:
+  docs:
+    image: ghcr.io/codeformers-it/ksefnik-docs:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7020:80"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:80/']
+      interval: 30s
+      timeout: 5s
+      retries: 3

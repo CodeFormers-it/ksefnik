@@ -1,50 +1,32 @@
-name: Deploy Docs
+name: Build & Deploy Docs
 
 on:
   pull_request:
     paths:
       - 'apps/docs/**'
       - 'packages/shared/src/schemas/**'
-  workflow_dispatch: # Triggered by ksefnik-pro when pro docs change
+      - 'docker/docs.Dockerfile'
+      - 'docker/nginx-docs.conf'
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy to VPS after build'
+        type: boolean
+        default: true
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    env:
-      PRO_REPO_TOKEN: ${{ secrets.PRO_REPO_TOKEN }}
+    runs-on: [self-hosted, codeformers]
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - run: pnpm --filter @ksefnik/docs build
-
-      - name: Upload artifact
-        if: github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: apps/docs/dist
+      - name: Build & push Docker image
+        run: ./scripts/build-and-push.sh
 
   deploy:
-    if: github.ref == 'refs/heads/main'
     needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy
+    runs-on: [self-hosted, codeformers]
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy to VPS
+        run: ssh codeformers "cd /home/ubuntu/ksefnik.pl && ./scripts/deploy.sh"
