@@ -1,7 +1,55 @@
 {
   "name": "@ksefnik/core",
   "version": "0.0.1",
+  "description": "Core SDK for the Ksefnik KSeF reconciliation engine (Polish e-Invoice matching)",
+  "license": "MIT",
+  "author": "CodeFormers",
+  "homepage": "https://ksefnik.pl",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CodeFormers-it/ksefnik.git",
+    "directory": "packages/core"
+  },
+  "keywords": [
+    "ksef",
+    "ksefnik",
+    "ksef-sdk",
+    "ksef-api",
+    "ksef-2",
+    "ksef-node",
+    "e-invoice",
+    "einvoice",
+    "e-faktura",
+    "faktura",
+    "poland",
+    "polish",
+    "krajowy-system-e-faktur",
+    "ministry-of-finance",
+    "mf",
+    "invoice",
+    "typescript",
+    "nodejs",
+    "sdk",
+    "reconciliation",
+    "invoice-reconciliation",
+    "bank-statement",
+    "mt940",
+    "mbank",
+    "ing",
+    "pko",
+    "santander",
+    "fuzzy-matching",
+    "fuzzball",
+    "fintech",
+    "accounting"
+  ],
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "!dist/**/__tests__", "!dist/**/*.test.*", "README.md", "LICENSE"],
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -14,7 +62,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ksefnik/shared": "workspace:*",
+    "@ksefnik/shared": "workspace:^",
     "zod": "^3.24",
     "mt940js": "^1.3",
     "fuzzball": "^2.1",

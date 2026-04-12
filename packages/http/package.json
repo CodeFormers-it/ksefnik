@@ -1,0 +1,84 @@
+{
+  "name": "@ksefnik/http",
+  "version": "0.0.1",
+  "description": "KSeF HTTP adapter — authentication, challenge, sessions, invoice fetch (Polish e-Invoice API v2)",
+  "license": "MIT",
+  "author": "CodeFormers",
+  "homepage": "https://ksefnik.pl",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CodeFormers-it/ksefnik.git",
+    "directory": "packages/http"
+  },
+  "keywords": [
+    "ksef",
+    "ksefnik",
+    "ksef-api",
+    "ksef-client",
+    "ksef-http",
+    "ksef-sdk",
+    "ksef-2",
+    "ksef-node",
+    "e-invoice",
+    "einvoice",
+    "e-faktura",
+    "faktura",
+    "poland",
+    "polish",
+    "krajowy-system-e-faktur",
+    "ministry-of-finance",
+    "mf",
+    "invoice",
+    "invoice-api",
+    "typescript",
+    "nodejs",
+    "sdk",
+    "http-client",
+    "api-client",
+    "rsa-oaep",
+    "authentication",
+    "fa2",
+    "fa3",
+    "xml",
+    "fintech"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "!dist/**/__tests__",
+    "!dist/**/*.test.*",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "dev": "tsc --build --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "smoke": "node --env-file=../../.env scripts/smoke-test.mjs",
+    "generate": "openapi-typescript https://api.ksef.mf.gov.pl/docs/v2/openapi.json -o src/generated/ksef-api.ts --alphabetize --export-type"
+  },
+  "dependencies": {
+    "@ksefnik/shared": "workspace:^",
+    "@ksefnik/core": "workspace:^",
+    "fast-xml-parser": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.7",
+    "vitest": "^3.2",
+    "msw": "^2.7.0",
+    "openapi-typescript": "^7.4.4"
+  }
+}

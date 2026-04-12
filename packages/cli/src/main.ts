@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { Command } from 'commander'
 import { registerFetchCommand } from './commands/fetch.js'
 import { registerSendCommand } from './commands/send.js'
@@ -14,8 +15,13 @@ export function createProgram(): Command {
     .description('KSeF reconciliation CLI')
     .version('0.0.1')
     .option('--nip <nip>', 'NIP number')
-    .option('--env <environment>', 'KSeF environment: production|demo|test', 'test')
+    .option('--env <environment>', 'KSeF environment: production|demo|test (default: env KSEFNIK_ENV or test)')
     .option('--token <token>', 'KSeF API token')
+    .option('--adapter <kind>', 'KSeF adapter: http | simulator (default: env KSEFNIK_ADAPTER or http)')
+    .option(
+      '--public-key <pathOrPem>',
+      'Path to KSeF MF public key (PEM) or inline PEM; required for HTTP adapter',
+    )
     .option('--debug', 'Enable debug output')
 
   registerFetchCommand(program)
@@ -27,3 +33,9 @@ export function createProgram(): Command {
 
   return program
 }
+
+createProgram().parseAsync(process.argv).catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error)
+  process.stderr.write(`ksefnik: ${message}\n`)
+  process.exit(1)
+})

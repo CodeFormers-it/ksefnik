@@ -1,7 +1,50 @@
 {
   "name": "@ksefnik/simulator",
   "version": "0.0.1",
+  "description": "Offline KSeF mock server for testing and development without hitting the real Ministry of Finance API",
+  "license": "MIT",
+  "author": "CodeFormers",
+  "homepage": "https://ksefnik.pl",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CodeFormers-it/ksefnik.git",
+    "directory": "packages/simulator"
+  },
+  "keywords": [
+    "ksef",
+    "ksefnik",
+    "ksef-mock",
+    "ksef-simulator",
+    "ksef-test",
+    "ksef-sandbox",
+    "ksef-sdk",
+    "ksef-2",
+    "e-invoice",
+    "einvoice",
+    "e-faktura",
+    "faktura",
+    "poland",
+    "polish",
+    "krajowy-system-e-faktur",
+    "invoice",
+    "typescript",
+    "nodejs",
+    "sdk",
+    "mock",
+    "simulator",
+    "testing",
+    "test-harness",
+    "offline",
+    "vitest",
+    "ci"
+  ],
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "!dist/**/__tests__", "!dist/**/*.test.*", "README.md", "LICENSE"],
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -14,8 +57,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ksefnik/shared": "workspace:*",
-    "@ksefnik/core": "workspace:*"
+    "@ksefnik/shared": "workspace:^",
+    "@ksefnik/core": "workspace:^"
   },
   "devDependencies": {
     "typescript": "^5.7"

@@ -1,6 +1,7 @@
 import type { Command } from 'commander'
 import { createKsefnik } from '@ksefnik/core'
-import { resolveConfig, type CliGlobalOpts } from '../utils/config.js'
+import { KsefAuthError } from '@ksefnik/http'
+import { resolveAdapter, resolveConfig, type CliGlobalOpts } from '../utils/config.js'
 import { output } from '../utils/output.js'
 
 export function registerFetchCommand(program: Command): void {
@@ -13,14 +14,29 @@ export function registerFetchCommand(program: Command): void {
     .action(async (opts: { from: string; to: string; format: string }) => {
       const globalOpts = program.opts<CliGlobalOpts>()
       const config = resolveConfig(globalOpts)
-      const ksef = createKsefnik({ config })
+      const adapter = resolveAdapter(globalOpts, config)
+      const ksef = createKsefnik({ config, adapter })
 
-      const invoices = await ksef.invoices.fetch({
-        from: opts.from,
-        to: opts.to,
-        nip: config.nip || undefined,
-      })
-
-      output(invoices, opts.format as 'json' | 'table')
+      try {
+        const invoices = await ksef.invoices.fetch({
+          from: opts.from,
+          to: opts.to,
+          nip: config.nip || undefined,
+        })
+        output(invoices, opts.format as 'json' | 'table')
+      } catch (error) {
+        if (error instanceof KsefAuthError) {
+          const status = error.statusCode ?? '?'
+          throw new Error(
+            `KSeF authentication failed (status ${status}): ${error.message}. ` +
+              'Verify --token / KSEFNIK_TOKEN and that the token is valid for this environment.',
+          )
+        }
+        throw error
+      } finally {
+        if (adapter.closeSession) {
+          await adapter.closeSession()
+        }
+      }
     })
 }

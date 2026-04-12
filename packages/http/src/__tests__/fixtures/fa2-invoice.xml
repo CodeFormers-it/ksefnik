@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Faktura xmlns="http://crd.gov.pl/wzor/2023/06/29/12648/">
+  <Naglowek>
+    <KodFormularza kodSystemowy="FA (2)" wersjaSchemy="1-0E">FA</KodFormularza>
+    <WariantFormularza>2</WariantFormularza>
+    <DataWytworzeniaFa>2026-03-15T12:00:00Z</DataWytworzeniaFa>
+    <SystemInfo>ksefnik-test</SystemInfo>
+  </Naglowek>
+  <Podmiot1>
+    <DaneIdentyfikacyjne>
+      <NIP>5252344078</NIP>
+      <Nazwa>Acme Sp. z o.o.</Nazwa>
+    </DaneIdentyfikacyjne>
+  </Podmiot1>
+  <Podmiot2>
+    <DaneIdentyfikacyjne>
+      <NIP>7010002137</NIP>
+      <Nazwa>Build Eco Sp. z o.o.</Nazwa>
+    </DaneIdentyfikacyjne>
+  </Podmiot2>
+  <Fa>
+    <KodWaluty>PLN</KodWaluty>
+    <P_1>2026-03-15</P_1>
+    <P_2>FV/2026/03/42</P_2>
+    <P_15>1234.56</P_15>
+  </Fa>
+</Faktura>

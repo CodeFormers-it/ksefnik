@@ -1,0 +1,47 @@
+name: Bump patch on main
+
+# Every merge to main bumps the patch version of all @ksefnik/* packages.
+# This is a development-only bump — nothing is published to npm here.
+# The bot commit uses [skip bump] + [skip ci] to avoid workflow loops.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    if: |
+      github.actor != 'github-actions[bot]' &&
+      !contains(github.event.head_commit.message, '[skip bump]')
+    runs-on: [self-hosted, codeformers]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Bump patch versions in all packages
+        id: bump
+        run: node scripts/bump-version.mjs patch
+
+      - name: Commit and push bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet packages/*/package.json; then
+            echo "No changes"
+            exit 0
+          fi
+
+          VERSION=$(node -p "require('./packages/shared/package.json').version")
+          git add packages/*/package.json
+          git commit -m "chore: bump dev version to $VERSION [skip bump] [skip ci]"
+          git push origin main

@@ -1,3 +1,6 @@
 dist
 node_modules
 coverage
+
+# Auto-generated from OpenAPI — regenerate via `pnpm --filter @ksefnik/http generate`
+packages/http/src/generated/ksef-api.ts

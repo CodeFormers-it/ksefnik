@@ -31,20 +31,25 @@ export class KsefAdapterImpl implements KsefAdapter {
     return this.session
   }
 
-  private ensureSession(): KsefSessionState {
+  private async ensureSession(): Promise<KsefSessionState> {
     if (!this.session) {
-      throw new Error('KSeF session not initialized. Call initSession() first.')
+      await this.initSession()
+    }
+    if (!this.session) {
+      throw new Error('KSeF session init returned no session state')
     }
     return this.session
   }
 
   async fetchInvoices(opts: FetchInvoicesOpts): Promise<Invoice[]> {
-    const session = this.ensureSession()
+    const session = await this.ensureSession()
+    const subjectType = opts.subjectType ?? 'Subject2'
     const result = await this.client.fetchInvoices({
       token: session.token,
       dateFrom: opts.from,
       dateTo: opts.to,
       subjectNip: opts.nip,
+      subjectType,
       pageSize: opts.pageSize,
       pageOffset: opts.pageOffset,
     })
@@ -53,18 +58,20 @@ export class KsefAdapterImpl implements KsefAdapter {
       id: crypto.randomUUID(),
       invoiceNumber: raw.invoiceNumber,
       sellerNIP: raw.subjectNip,
-      grossAmount: 0, // to be parsed from XML
+      buyerNIP: raw.buyerNip,
+      grossAmount: raw.grossAmountGrosze ?? 0,
       currency: 'PLN' as const,
       issueDate: raw.invoicingDate,
       ksefReference: raw.ksefReferenceNumber,
       sellerName: raw.subjectName,
+      buyerName: raw.buyerName,
       rawXml: raw.xml,
       createdAt: new Date().toISOString(),
     }))
   }
 
   async sendInvoice(input: SendInvoiceInput): Promise<SendInvoiceResult> {
-    const session = this.ensureSession()
+    const session = await this.ensureSession()
     const result = await this.client.sendInvoice({
       token: session.token,
       xml: input.xml,
@@ -77,7 +84,7 @@ export class KsefAdapterImpl implements KsefAdapter {
   }
 
   async getUpo(ksefReference: string): Promise<UpoResult> {
-    const session = this.ensureSession()
+    const session = await this.ensureSession()
     const result = await this.client.getUpo({
       token: session.token,
       ksefReferenceNumber: ksefReference,

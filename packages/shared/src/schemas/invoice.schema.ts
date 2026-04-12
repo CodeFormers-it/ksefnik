@@ -16,7 +16,7 @@ export const InvoiceSchema = z.object({
   invoiceNumber: z.string().min(1),
   sellerNIP: nipSchema,
   buyerNIP: nipSchema.optional(),
-  grossAmount: z.number().int().positive(),
+  grossAmount: z.number().int().nonnegative(),
   netAmount: z.number().int().positive().optional(),
   vatAmount: z.number().int().nonnegative().optional(),
   currency: z.literal('PLN'),

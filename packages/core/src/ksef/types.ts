@@ -12,6 +12,8 @@ export interface KsefClientConfig {
   token: string
 }
 
+export type KsefSubjectType = 'Subject1' | 'Subject2' | 'Subject3'
+
 export interface KsefRawInvoice {
   ksefReferenceNumber: string
   invoiceNumber: string
@@ -19,6 +21,10 @@ export interface KsefRawInvoice {
   subjectName?: string
   invoicingDate: string
   xml: string
+  grossAmountGrosze?: number
+  currency?: string
+  buyerNip?: string
+  buyerName?: string
 }
 
 export interface KsefClient {
@@ -29,6 +35,7 @@ export interface KsefClient {
     dateFrom: string
     dateTo: string
     subjectNip?: string
+    subjectType?: KsefSubjectType
     pageSize?: number
     pageOffset?: number
   }): Promise<{ invoices: KsefRawInvoice[]; total: number }>

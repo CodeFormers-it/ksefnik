@@ -1,7 +1,46 @@
 {
   "name": "@ksefnik/shared",
   "version": "0.0.1",
+  "description": "Shared Zod schemas and types for the Ksefnik SDK (Polish KSeF e-Invoice reconciliation)",
+  "license": "MIT",
+  "author": "CodeFormers",
+  "homepage": "https://ksefnik.pl",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CodeFormers-it/ksefnik.git",
+    "directory": "packages/shared"
+  },
+  "keywords": [
+    "ksef",
+    "ksefnik",
+    "ksef-sdk",
+    "ksef-api",
+    "ksef-2",
+    "e-invoice",
+    "einvoice",
+    "e-faktura",
+    "faktura",
+    "poland",
+    "polish",
+    "krajowy-system-e-faktur",
+    "ministry-of-finance",
+    "mf",
+    "invoice",
+    "typescript",
+    "nodejs",
+    "sdk",
+    "zod",
+    "schemas",
+    "types",
+    "validation"
+  ],
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "!dist/**/__tests__", "!dist/**/*.test.*", "README.md", "LICENSE"],
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

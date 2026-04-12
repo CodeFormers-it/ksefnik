@@ -1,9 +1,59 @@
 {
   "name": "@ksefnik/cli",
   "version": "0.0.1",
+  "description": "Command-line interface for Ksefnik — fetch KSeF invoices, reconcile with bank statements, run MCP server",
+  "license": "MIT",
+  "author": "CodeFormers",
+  "homepage": "https://ksefnik.pl",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CodeFormers-it/ksefnik.git",
+    "directory": "packages/cli"
+  },
+  "keywords": [
+    "ksef",
+    "ksefnik",
+    "ksef-cli",
+    "ksef-sdk",
+    "ksef-api",
+    "ksef-2",
+    "ksef-mcp",
+    "e-invoice",
+    "einvoice",
+    "e-faktura",
+    "faktura",
+    "poland",
+    "polish",
+    "krajowy-system-e-faktur",
+    "ministry-of-finance",
+    "invoice",
+    "typescript",
+    "nodejs",
+    "sdk",
+    "cli",
+    "command-line",
+    "binary",
+    "reconciliation",
+    "bank-statement",
+    "mt940",
+    "mbank",
+    "ing",
+    "pko",
+    "santander",
+    "mcp",
+    "mcp-server",
+    "claude",
+    "ai-agent"
+  ],
   "type": "module",
   "bin": {
     "ksefnik": "./dist/main.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "!dist/**/__tests__", "!dist/**/*.test.*", "README.md", "LICENSE"],
+  "publishConfig": {
+    "access": "public"
   },
   "exports": {
     ".": {
@@ -17,9 +67,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ksefnik/shared": "workspace:*",
-    "@ksefnik/core": "workspace:*",
-    "@ksefnik/mcp": "workspace:*",
+    "@ksefnik/shared": "workspace:^",
+    "@ksefnik/core": "workspace:^",
+    "@ksefnik/http": "workspace:^",
+    "@ksefnik/simulator": "workspace:^",
+    "@ksefnik/mcp": "workspace:^",
     "@modelcontextprotocol/sdk": "^1.12",
     "commander": "^13.1",
     "@clack/prompts": "^0.10"

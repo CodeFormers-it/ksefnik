@@ -8,6 +8,8 @@
   "references": [
     { "path": "../shared" },
     { "path": "../core" },
+    { "path": "../http" },
+    { "path": "../simulator" },
     { "path": "../mcp" }
   ]
 }

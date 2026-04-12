@@ -8,13 +8,19 @@
   </a>
 </p>
 
+<h1 align="center">Ksefnik — KSeF SDK dla TypeScript / Node.js z MCP serverem dla Claude i Cursor</h1>
+
 <p align="center">
-  TypeScript SDK do reconcyliacji faktur z Krajowego Systemu e-Faktur (KSeF) z wyciagami bankowymi.
-  <br />
-  Darmowe i otwarte narzedzie dla polskich deweloperow.
+  Otwarte SDK do <strong>Krajowego Systemu e-Faktur (KSeF 2.0)</strong> — produkcyjny klient HTTP API, silnik reconcyliacji faktur z wyciągami bankowymi (MT940, mBank, ING, PKO BP, Santander) i <strong>Model Context Protocol server</strong>, który podpina polskie e-faktury bezpośrednio pod Claude Desktop, Cursor i innych agentów AI.
+  <br /><br />
+  <em>KSeF SDK · KSeF Node.js client · KSeF API · Polish e-Invoice API · National e-Invoice System library · KSeF TypeScript client · KSeF MCP server · e-faktura SDK · KSeF 2.0 client</em>
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/@ksefnik/core"><img src="https://img.shields.io/npm/v/@ksefnik/core?style=for-the-badge&label=npm%20%40ksefnik%2Fcore&color=cb3837" alt="npm @ksefnik/core" /></a>
+  &nbsp;
+  <a href="https://www.npmjs.com/package/@ksefnik/mcp"><img src="https://img.shields.io/npm/v/@ksefnik/mcp?style=for-the-badge&label=npm%20%40ksefnik%2Fmcp&color=cb3837" alt="npm @ksefnik/mcp" /></a>
+  &nbsp;
   <a href="https://docs.ksefnik.pl/"><img src="https://img.shields.io/badge/📖_Dokumentacja-docs.ksefnik.pl-2563eb?style=for-the-badge" alt="Dokumentacja" /></a>
   &nbsp;
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge" alt="License: MIT" /></a>
@@ -24,9 +30,11 @@
 
 ## O projekcie
 
-Ksefnik to otwarte narzedzie stworzone przez [CodeFormers.it](https://codeformers.it/) dla polskich deweloperow i zespolow finansowych. Automatyzuje dopasowywanie faktur pobranych z KSeF do transakcji na wyciagach bankowych. SDK zapewnia pelna kontrole nad procesem reconcyliacji -- od importu danych, przez wieloetapowe dopasowywanie, az po raportowanie rozbieznosci.
+**Ksefnik** to kompletne, otwarte SDK do **Krajowego Systemu e-Faktur (KSeF 2.0)** — obowiązkowego od 2026-02-01 systemu Ministerstwa Finansów do wystawiania i pobierania faktur elektronicznych w Polsce. Projekt rozwijany przez [CodeFormers.it](https://codeformers.it/) adresuje dwa problemy, które każdy deweloper integrujący się z KSeF musi rozwiązać: **produkcyjny klient HTTP do `api.ksef.mf.gov.pl`** (auth flow z challenge + RSA-OAEP, parsowanie FA(2)/FA(3), refresh tokenów, rate limiting) oraz **reconcyliacja faktur z wyciągami bankowymi** (6-stopniowy pipeline dopasowujący KSeF ↔ MT940/mBank/ING/PKO BP/Santander).
 
-Projekt jest na wczesnym etapie rozwoju. API moze sie zmieniac miedzy wersjami.
+Jako jeden z pierwszych SDK-ów do polskiej e-faktury Ksefnik wystawia również **Model Context Protocol server** — dzięki czemu możesz rozmawiać z KSeF-em z poziomu Claude Desktop, Cursora, Continue albo dowolnego innego klienta MCP. Pobranie faktur kosztowych za marzec, import wyciągu z ING i uruchomienie reconcyliacji sprowadza się do jednego zdania w czacie z AI.
+
+Projekt jest na wczesnym etapie rozwoju — API może się zmieniać między wersjami `0.x`. Od `1.0` obowiązuje semver.
 
 ## Funkcje
 
@@ -37,6 +45,10 @@ Automatyczne dopasowywanie faktur KSeF do przelewow bankowych w 6 krokach: numer
 ### Bank Parsers
 
 Import wyciagow z polskich bankow: MT940 (standard), CSV z mBank, ING, PKO BP, Santander. Automatyczna detekcja formatu pliku. Ekstrakcja NIP z tytulow przelewow.
+
+### HTTP Adapter (`@ksefnik/http`)
+
+Produkcyjny klient HTTP do KSeF 2.0 (`api.ksef.mf.gov.pl`). Pelny flow uwierzytelnienia (challenge + RSA-OAEP), pobieranie metadanych faktur, parsowanie FA(2)/FA(3) XML, ekstrakcja kwot brutto. Gotowy do podpiecia pod `createKsefnik()` przez `createHttpAdapter({ nip, token, environment, publicKeyPem })`. Szczegoly: [packages/http/README.md](packages/http/README.md).
 
 ### KSeF Simulator
 
@@ -59,15 +71,41 @@ Pelne typy TypeScript wygenerowane z oficjalnych schematow XSD KSeF. Bledy wychw
 **Wymagania**: Node.js 22+, pnpm 9+
 
 ```bash
-npm install @ksefnik/core
+npm install @ksefnik/core @ksefnik/http
 # lub
-pnpm add @ksefnik/core
+pnpm add @ksefnik/core @ksefnik/http
 ```
 
-Jesli potrzebujesz symulatora KSeF do testow:
+- `@ksefnik/core` — reconcyliacja, parsery bankow, walidacja (baza)
+- `@ksefnik/http` — produkcyjny klient HTTP do KSeF 2.0 (wymagane do produkcji)
+- `@ksefnik/simulator` — mock KSeF do testow offline (devDep)
 
 ```bash
 npm install --save-dev @ksefnik/simulator
+```
+
+### Konfiguracja HTTP adaptera
+
+```ts
+import { createKsefnik } from '@ksefnik/core'
+import { createHttpAdapter } from '@ksefnik/http'
+import { readFileSync } from 'node:fs'
+
+const adapter = createHttpAdapter({
+  nip: '7010002137',
+  token: process.env.KSEF_TOKEN!,
+  environment: 'production',
+  publicKeyPem: readFileSync('./ksef-public-key.pem', 'utf8'),
+})
+
+const ksef = createKsefnik({
+  config: { nip: '7010002137', environment: 'production', token: process.env.KSEF_TOKEN! },
+  adapter,
+})
+
+await adapter.initSession?.()
+const invoices = await ksef.invoices.fetch({ from: '2026-03-01', to: '2026-03-31' })
+await adapter.closeSession?.()
 ```
 
 ## Szybki start
@@ -190,11 +228,49 @@ pnpm test:watch     # tryb watch
 
 Zapraszamy do zglaszania Issues i Pull Requestow. Projekt jest na wczesnym etapie, wiec kazdego rodzaju wklad jest mile widziany.
 
+## Często zadawane pytania
+
+### Jak pobrać faktury z KSeF w Node.js albo TypeScript?
+
+Zainstaluj `@ksefnik/core` i `@ksefnik/http`, skonfiguruj `createHttpAdapter` z tokenem KSeF i kluczem publicznym MF, i woła `ksef.invoices.fetch({ from, to })`. Pełen przykład w sekcji [Szybki start](#szybki-start). Ksefnik jest w tej chwili jedynym produkcyjnym **KSeF SDK dla TypeScript / Node.js** z pełnym pokryciem flow uwierzytelnienia KSeF 2.0.
+
+### Czy Ksefnik wspiera KSeF 2.0 (obowiązkowe API od 2026-02-01)?
+
+Tak. Pakiet `@ksefnik/http` rozmawia bezpośrednio z `api.ksef.mf.gov.pl/v2`, implementuje pełen flow uwierzytelnienia (challenge + **RSA-OAEP SHA-256**, redeem, refresh) i parsuje faktury w formacie FA(2)/FA(3). Typy są generowane z oficjalnego OpenAPI MF, więc przy każdej zmianie kontraktu w MF masz breaking change na etapie kompilacji TypeScript.
+
+### Jak zintegrować KSeF z Claude Desktop, Cursorem albo innym agentem AI?
+
+Ksefnik wystawia pełny serwer **Model Context Protocol** (`@ksefnik/mcp`) z 8 narzędziami: pobieranie faktur z KSeF, import wyciągów bankowych, reconcyliacja, zapytania o niedopasowane pozycje, ręczne potwierdzanie matchów, walidacja i wysyłka. Konfiguracja Claude Desktop to 5 linii JSON-a w `claude_desktop_config.json` — szczegóły w sekcji [MCP Server](#mcp-server) i w [`@ksefnik/mcp`](packages/mcp/README.md). Jeżeli szukasz **KSeF MCP server** albo **KSeF Claude AI integration** — to jest to.
+
+### Jak zautomatyzować dopasowanie faktur KSeF do wyciągu bankowego?
+
+Silnik `@ksefnik/core` odpala 6-stopniowy pipeline reconcyliacji: referencja KSeF → NIP + dokładna kwota → numer faktury w tytule przelewu → fuzzy matching nazwy kontrahenta → płatności częściowe → proximity. Każdy match ma `score`, `strategy` i `confidence`, więc automatycznie wiesz, które dopasowania można zatwierdzić bez oglądania, a które skierować do ręcznej weryfikacji. Wspierane formaty wyciągów: **MT940** (SWIFT, wszystkie polskie banki), **mBank CSV**, **ING CSV**, **PKO BP CSV**, **Santander CSV**.
+
+### Czy mogę testować integrację z KSeF offline, bez dostępu do `api-test.ksef.mf.gov.pl`?
+
+Tak — `@ksefnik/simulator` to deterministyczny **offline mock KSeF** z gotowymi scenariuszami testowymi (happy-path, timeout, wygasła sesja, błąd walidacji NIP, opóźnione UPO). Implementuje dokładnie ten sam interfejs co `@ksefnik/http`, więc kod produkcyjny nie wie, że odpowiada mu mock. Idealny do CI w GitHub Actions — bez tokenów, bez sekretów, bez zależności od dostępności serwerów MF.
+
+### Szukam biblioteki do KSeF w Pythonie — czy jest alternatywa w TypeScript?
+
+Ksefnik jest natywnym **KSeF SDK w TypeScript** — działa w Node.js 22+, Next.js API routes, serverless (Vercel Functions, Lambda, Cloudflare Workers), długo żyjących workerach, CLI i jako MCP server dla agentów AI. Kwoty są trzymane jako integer grosze (bez floatów), modele domenowe są schematami Zod, kryptografia idzie przez `node:crypto` + `webcrypto.subtle` (zero zależności kryptograficznych trzecich).
+
+### Jakie środowiska KSeF wspiera?
+
+| Środowisko | Bazowy URL |
+|---|---|
+| `production` | `https://api.ksef.mf.gov.pl/v2` |
+| `demo` | `https://api-demo.ksef.mf.gov.pl/v2` |
+| `test` | `https://api-test.ksef.mf.gov.pl/v2` |
+
+Środowisko ustawiasz flagą `--env` w CLI albo polem `environment` w `createHttpAdapter`. Domyślnie `test`, żeby nic nie wyszło na produkcję przypadkiem.
+
+### Czy Ksefnik obsługuje wysyłkę faktur do KSeF, czy tylko odczyt?
+
+W obecnej wersji MVP pełna wysyłka (asynchroniczny `POST /invoices/exports` + polling + UPO) jest jeszcze niepełna — `sendInvoice` w `@ksefnik/http` jest stubem. Pełne wsparcie wysyłki wchodzi w v0.1. **Pobieranie faktur, reconcyliacja, walidacja i integracja MCP działają produkcyjnie już dziś.**
+
 ## Licencja
 
-MIT -- darmowe dla wszystkich, do dowolnego zastosowania.
-
-Szczegoly w pliku [LICENSE](LICENSE).
+MIT — darmowe dla wszystkich, do dowolnego zastosowania. Szczegóły w pliku [LICENSE](LICENSE).
 
 ---
 

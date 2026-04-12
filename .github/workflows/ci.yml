@@ -2,13 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, prod]
   pull_request:
-    branches: [main]
+    branches: [main, prod]
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, codeformers]
     strategy:
       matrix:
         node-version: [22]

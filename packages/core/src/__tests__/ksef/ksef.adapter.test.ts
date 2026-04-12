@@ -73,10 +73,11 @@ describe('KsefAdapterImpl', () => {
   })
 
   describe('fetchInvoices', () => {
-    it('throws without session', async () => {
-      await expect(
-        adapter.fetchInvoices({ from: '2026-03-01', to: '2026-03-31' }),
-      ).rejects.toThrow('session not initialized')
+    it('lazily initializes session on first call', async () => {
+      expect(adapter.getSession()).toBeNull()
+      await adapter.fetchInvoices({ from: '2026-03-01', to: '2026-03-31' })
+      expect(client.initSession).toHaveBeenCalledTimes(1)
+      expect(adapter.getSession()).not.toBeNull()
     })
 
     it('fetches and maps invoices', async () => {
@@ -125,10 +126,10 @@ describe('KsefAdapterImpl', () => {
   })
 
   describe('sendInvoice', () => {
-    it('throws without session', async () => {
-      await expect(
-        adapter.sendInvoice({ xml: '<Faktura/>', nip: '5213456784' }),
-      ).rejects.toThrow('session not initialized')
+    it('lazily initializes session on first call', async () => {
+      expect(adapter.getSession()).toBeNull()
+      await adapter.sendInvoice({ xml: '<Faktura/>', nip: '5213456784' })
+      expect(client.initSession).toHaveBeenCalledTimes(1)
     })
 
     it('sends invoice and returns result', async () => {
@@ -148,8 +149,10 @@ describe('KsefAdapterImpl', () => {
   })
 
   describe('getUpo', () => {
-    it('throws without session', async () => {
-      await expect(adapter.getUpo('KSEF-REF-001')).rejects.toThrow('session not initialized')
+    it('lazily initializes session on first call', async () => {
+      expect(adapter.getSession()).toBeNull()
+      await adapter.getUpo('KSEF-REF-001')
+      expect(client.initSession).toHaveBeenCalledTimes(1)
     })
 
     it('fetches UPO', async () => {

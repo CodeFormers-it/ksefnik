@@ -1,0 +1,92 @@
+name: Release to npm (prod)
+
+# Merging into prod bumps the minor version of all @ksefnik/* packages,
+# builds everything, publishes to npm with provenance, tags the release,
+# and opens a sync PR back to main.
+#
+# The merge to prod IS the "I want to release" decision.
+
+on:
+  push:
+    branches: [prod]
+
+permissions:
+  contents: write
+  id-token: write
+  pull-requests: write
+
+jobs:
+  release:
+    if: |
+      github.actor != 'github-actions[bot]' &&
+      !contains(github.event.head_commit.message, '[skip bump]')
+    runs-on: [self-hosted, codeformers]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test -- --run
+        env:
+          CI: 'true'
+
+      - name: Bump minor versions in all packages
+        run: node scripts/bump-version.mjs minor
+
+      - name: Build all packages
+        run: pnpm -r build
+
+      - name: Publish to npm
+        run: pnpm -r publish --access public --provenance --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Commit version bump + tag
+        id: tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          VERSION=$(node -p "require('./packages/shared/package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          git add packages/*/package.json
+          git commit -m "chore(release): v$VERSION [skip bump]"
+          git tag "v$VERSION"
+          git push origin prod
+          git push origin "v$VERSION"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.tag.outputs.version }}
+          name: v${{ steps.tag.outputs.version }}
+          generate_release_notes: true
+
+      - name: Open sync PR prod → main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base main \
+            --head prod \
+            --title "chore: sync versions from prod v${{ steps.tag.outputs.version }}" \
+            --body "Automated version sync after npm release of v${{ steps.tag.outputs.version }}. Merge to bring main in line with published versions." \
+            || echo "sync PR already exists or no diff — skipping"
