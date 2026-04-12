@@ -1,6 +1,6 @@
 {
   "name": "@ksefnik/core",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Core SDK for the Ksefnik KSeF reconciliation engine (Polish e-Invoice matching)",
   "license": "MIT",
   "author": "CodeFormers",
@@ -46,7 +46,13 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "!dist/**/__tests__", "!dist/**/*.test.*", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "!dist/**/__tests__",
+    "!dist/**/*.test.*",
+    "README.md",
+    "LICENSE"
+  ],
   "publishConfig": {
     "access": "public"
   },

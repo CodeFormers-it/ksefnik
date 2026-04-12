@@ -1,6 +1,6 @@
 {
   "name": "@ksefnik/mcp",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Model Context Protocol server for Ksefnik — exposes KSeF reconciliation tools to Claude, Cursor and other MCP clients",
   "license": "MIT",
   "author": "CodeFormers",
@@ -50,7 +50,13 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "!dist/**/__tests__", "!dist/**/*.test.*", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "!dist/**/__tests__",
+    "!dist/**/*.test.*",
+    "README.md",
+    "LICENSE"
+  ],
   "publishConfig": {
     "access": "public"
   },

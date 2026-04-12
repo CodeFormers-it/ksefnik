@@ -1,6 +1,6 @@
 {
   "name": "@ksefnik/cli",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Command-line interface for Ksefnik — fetch KSeF invoices, reconcile with bank statements, run MCP server",
   "license": "MIT",
   "author": "CodeFormers",
@@ -51,7 +51,13 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "!dist/**/__tests__", "!dist/**/*.test.*", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "!dist/**/__tests__",
+    "!dist/**/*.test.*",
+    "README.md",
+    "LICENSE"
+  ],
   "publishConfig": {
     "access": "public"
   },
