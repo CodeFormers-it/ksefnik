@@ -5,6 +5,7 @@ name: Release to npm (prod)
 # and opens a sync PR back to main.
 #
 # The merge to prod IS the "I want to release" decision.
+# Only @luke-cf can approve and merge PRs to prod.
 
 on:
   push:
@@ -17,9 +18,7 @@ permissions:
 
 jobs:
   release:
-    if: |
-      github.actor != 'github-actions[bot]' &&
-      !contains(github.event.head_commit.message, '[skip bump]')
+    if: github.actor != 'github-actions[bot]'
     runs-on: [self-hosted, codeformers]
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +67,7 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
           git add packages/*/package.json
-          git commit -m "chore(release): v$VERSION [skip bump]"
+          git commit -m "chore(release): v$VERSION"
           git tag "v$VERSION"
           git push origin prod
           git push origin "v$VERSION"

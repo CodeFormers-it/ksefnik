@@ -1,164 +1,95 @@
 # Releasing Ksefnik packages
 
-This repository uses a **two-branch release model**:
+## Branches
 
-- **`main`** — development branch. Every merge here bumps the **patch** version of all `@ksefnik/*` packages. **Nothing is published.**
-- **`prod`** — release branch. Every merge here bumps the **minor** version of all packages, publishes them to npm, tags the release, and opens a sync PR back to `main`.
+- **`main`** — development branch. Push and merge freely. **Nothing happens automatically.**
+- **`prod`** — release branch. Merge from main triggers build, test, version bump, npm publish, and GitHub Release.
 
-**You always decide when to publish.** Publication happens only when you merge `main` → `prod`.
+## Who can merge
 
-## Flow diagram
+Only **@luke-cf** can approve and merge PRs to `main` and `prod` (enforced via CODEOWNERS + branch protection).
+
+## Flow
 
 ```
-feature/xyz ──PR──▶ main              (patch bump, no publish)
+feature/xyz ──PR──▶ main              (nothing happens)
                      │
                      │  when ready to release:
+                     │  open PR main → prod
                      ▼
-                    prod              (minor bump + npm publish)
+                    prod              (auto: minor bump + npm publish)
                      │
                      │ auto-opens sync PR
                      ▼
                     main              (versions in sync with npm)
 ```
 
-## Version bumping rules
+## How to release
 
-| Event | Branch | Bump | Published |
-|---|---|---|---|
-| PR merged to `main` | `main` | `patch` (0.0.1 → 0.0.2) | ❌ no |
-| PR merged to `prod` | `prod` | `minor` (0.0.5 → 0.1.0) | ✅ all 6 packages |
+1. Open a PR from `main` → `prod`
+2. CI runs on the PR (build + typecheck + tests)
+3. Review and merge the PR
 
-All 6 packages always get the same version bump. This keeps the monorepo simple and avoids dependency drift.
-
-## First-time setup (once)
-
-### 1. Create the `prod` branch
-
-```bash
-git checkout main
-git pull
-git checkout -b prod
-git push -u origin prod
-```
-
-### 2. Add `NPM_TOKEN` as a GitHub secret
-
-Go to https://github.com/CodeFormers-it/ksefnik/settings/secrets/actions and create a new repository secret:
-
-- **Name**: `NPM_TOKEN`
-- **Value**: Granular Access Token from https://www.npmjs.com/settings/~/tokens with:
-  - **Packages and scopes** → `Read and write` on `@ksefnik`
-  - **Organizations** → `Read` on `ksefnik`
-  - **Bypass 2FA** → ✅ checked
-  - **Expiration** → 90 days (rotate when it expires)
-
-### 3. Enable branch protection (recommended)
-
-On https://github.com/CodeFormers-it/ksefnik/settings/branches protect both `main` and `prod`:
-
-- Require pull request before merging
-- Require status checks to pass (CI)
-- For `prod`: restrict who can push (only maintainers)
-
-## Daily development workflow
-
-### Making changes
-
-```bash
-git checkout main
-git pull
-git checkout -b feature/something
-
-# ...make changes, commit...
-
-git push -u origin feature/something
-gh pr create --base main
-```
-
-When the PR is merged to `main`, the `Bump patch on main` workflow automatically:
-
-1. Runs `node scripts/bump-version.mjs patch`
-2. Commits the version bumps to `main` as `chore: bump dev version to X.Y.Z [skip bump] [skip ci]`
-3. Pushes back to `main`
-
-**Nothing is published.** The version on `main` is purely for tracking dev progress.
-
-### Releasing to npm
-
-When you want to publish the accumulated changes:
-
-```bash
-git checkout prod
-git pull
-git merge main
-git push origin prod
-```
-
-Or open a PR `main` → `prod` via GitHub UI and merge it.
-
-The `Release to npm (prod)` workflow then:
+After merge, `prod-release.yml` automatically:
 
 1. Runs typecheck + tests
-2. Bumps all packages minor (e.g., `0.0.5` → `0.1.0`)
+2. Bumps **minor** version in all 6 packages (e.g., `0.0.1` → `0.1.0`)
 3. Builds all packages
-4. Publishes each to npm with [provenance](https://docs.npmjs.com/generating-provenance-statements) (GitHub-signed)
-5. Commits version bumps + tag `v0.1.0` to `prod`
+4. Publishes to npm with provenance
+5. Commits version bump + tag `v0.1.0` to `prod`
 6. Creates a GitHub Release with auto-generated notes
-7. Opens a sync PR `prod` → `main` titled `chore: sync versions from prod v0.1.0`
+7. Opens a sync PR `prod` → `main`
 
-**Merge the sync PR** afterwards so `main`'s version state matches what's published on npm. Otherwise the next patch bump on `main` will be lower than the latest published version.
+**Merge the sync PR** to keep `main` in sync with published versions.
 
 ## Bump script
 
-[scripts/bump-version.mjs](scripts/bump-version.mjs) is the single source of truth for version bumping. It can be run locally for testing:
+[scripts/bump-version.mjs](scripts/bump-version.mjs) bumps all 6 packages. Can be run locally:
 
 ```bash
-# Bump all packages patch (0.0.1 → 0.0.2)
-node scripts/bump-version.mjs patch
-
-# Bump minor (0.0.5 → 0.1.0)
-node scripts/bump-version.mjs minor
-
-# Bump major (0.9.2 → 1.0.0)
-node scripts/bump-version.mjs major
+node scripts/bump-version.mjs patch   # 0.0.1 → 0.0.2
+node scripts/bump-version.mjs minor   # 0.0.2 → 0.1.0
+node scripts/bump-version.mjs major   # 0.9.2 → 1.0.0
 ```
-
-It modifies every `packages/*/package.json` in place. Revert with `git checkout packages/*/package.json` if you ran it by accident.
 
 ## Major releases
 
-The automation only bumps patch (on `main`) and minor (on `prod`). For a **major release** (breaking change):
-
-1. Checkout prod manually: `git checkout prod && git pull`
-2. Run `node scripts/bump-version.mjs major` locally
-3. Commit: `git commit -am "chore(release): prepare major"`
-4. Push with skip marker: **`git push origin prod`** — but this would still trigger the minor bump. So instead:
-5. Better: disable the workflow temporarily, push, re-enable. Or run `pnpm -r publish --access public --provenance` manually from your laptop with `NPM_TOKEN` env set.
-
-Major releases should be rare and deliberate — do them by hand with explicit review.
-
-## Emergency: unpublishing
-
-- You have **72 hours** to unpublish a version: `npm unpublish @ksefnik/xxx@1.2.3`
-- After 72 hours, unpublishing is not allowed — publish a fix as a new version (`1.2.4`) instead
-- The unpublished version **cannot be republished for 24 hours**
-
-## Troubleshooting
-
-**"Workflow keeps looping on main"**
-Check the bot commit includes `[skip bump] [skip ci]`. GitHub natively skips workflow runs when `[skip ci]` is in the commit message.
-
-**"npm publish fails with 403"**
-`NPM_TOKEN` expired or was revoked. Generate a new one and update the repository secret.
-
-**"Versions on main and prod diverged"**
-Merge the latest sync PR from `prod` → `main`. If it was missed, manually run locally:
+For a **major** (breaking) release, run the bump locally before merging to prod:
 
 ```bash
 git checkout main
-git merge prod
+node scripts/bump-version.mjs major
+git commit -am "chore: prepare major release"
 git push origin main
+# then open PR main → prod as usual
 ```
 
-**"I need to publish without bumping"**
-You can't — the workflows always bump. If you truly need a no-bump republish (rare), run `pnpm -r publish` manually from your laptop after checking out the exact commit you want.
+The prod workflow will bump minor on top — so to get `1.0.0`, set packages to `0.999.0` before merging (or temporarily edit the workflow). Alternatively, publish major releases manually.
+
+## Branch protection setup
+
+On https://github.com/CodeFormers-it/ksefnik/settings/branches, configure:
+
+### `main`
+- Require pull request before merging
+- Required approvals: 1
+- Require review from Code Owners (`@luke-cf` via CODEOWNERS)
+- Require status checks: CI
+
+### `prod`
+- Require pull request before merging
+- Required approvals: 1
+- Require review from Code Owners (`@luke-cf` via CODEOWNERS)
+- Require status checks: CI
+- Allow `github-actions[bot]` to bypass (for version commit + tag push after release)
+
+## Troubleshooting
+
+**"npm publish fails with 401/403"**
+`NPM_TOKEN` secret expired or was revoked. Generate a new Granular token and update the repo secret.
+
+**"Versions on main and prod diverged"**
+Merge the sync PR from `prod` → `main`. If it was missed: `git checkout main && git merge prod && git push`.
+
+**"Self-hosted runner not picking up jobs"**
+Check macmini: `ssh codeformers-macmini` → verify `actions-runner` service is running.
