@@ -5,7 +5,7 @@ description: Opis struktury monorepo ksefnik, organizacji pakietów i zależnoś
 
 import { Aside, Steps } from '@astrojs/starlight/components'
 
-Ksefnik jest zorganizowany jako monorepo pnpm workspace z pięcioma pakietami i jedną aplikacją.
+Ksefnik jest zorganizowany jako monorepo pnpm workspace z sześcioma pakietami i jedną aplikacją.
 
 ## Struktura katalogów
 
@@ -14,6 +14,7 @@ ksefnik/
 ├── packages/
 │   ├── shared/        @ksefnik/shared     — Schematy Zod, typy, interfejsy pluginów
 │   ├── core/          @ksefnik/core       — Fasada SDK, silnik uzgadniania, parsery bankowe
+│   ├── http/          @ksefnik/http       — Klient HTTP KSeF API v2
 │   ├── simulator/     @ksefnik/simulator  — Offline mock KSeF API
 │   └── mcp/           @ksefnik/mcp        — Serwer MCP (cienka warstwa na core)
 ├── apps/
@@ -31,6 +32,7 @@ ksefnik/
     ↑
 @ksefnik/core            ← cała logika biznesowa
     ↑
+@ksefnik/http            ← klient HTTP KSeF API v2 (zależy od core + shared)
 @ksefnik/simulator       ← mock KSeF API (zależy od core)
 @ksefnik/mcp             ← serwer MCP (cienka warstwa na core)
 @ksefnik/cli             ← CLI (Commander.js + @clack/prompts)
@@ -62,6 +64,18 @@ Cała logika biznesowa. Eksportuje:
 - **Silnik walidacji** — 20 reguł
 - **Storage** — InMemoryStorage, SqliteStorage
 - **System pluginów** — PluginRegistry, loader
+
+### @ksefnik/http
+
+Klient HTTP do API KSeF v2. Implementuje `KsefClient` z `@ksefnik/core`:
+
+- **Autentykacja RSA-OAEP** — challenge/response z kluczem publicznym MF
+- **Zarządzanie sesją** — access + refresh tokeny, auto-odświeżanie
+- **Pobieranie faktur** — paginacja, metadane + opcjonalny XML
+- **Retry z backoff** — exponential backoff + Retry-After dla 429
+- **Typy OpenAPI** — generowane z oficjalnej specyfikacji KSeF
+
+Zależności runtime: `@ksefnik/shared`, `@ksefnik/core`, `fast-xml-parser`.
 
 ### @ksefnik/simulator
 

@@ -32,6 +32,9 @@ Zainstaluj tylko te pakiety, których potrzebujesz:
 
     # Serwer MCP do integracji z AI
     pnpm add @ksefnik/mcp
+
+    # Klient HTTP do prawdziwego API KSeF
+    pnpm add @ksefnik/http
     ```
   </TabItem>
   <TabItem label="npm">
@@ -44,6 +47,9 @@ Zainstaluj tylko te pakiety, których potrzebujesz:
 
     # Serwer MCP do integracji z AI
     npm install @ksefnik/mcp
+
+    # Klient HTTP do prawdziwego API KSeF
+    npm install @ksefnik/http
     ```
   </TabItem>
   <TabItem label="yarn">
@@ -56,6 +62,9 @@ Zainstaluj tylko te pakiety, których potrzebujesz:
 
     # Serwer MCP do integracji z AI
     yarn add @ksefnik/mcp
+
+    # Klient HTTP do prawdziwego API KSeF
+    yarn add @ksefnik/http
     ```
   </TabItem>
 </Tabs>
@@ -67,6 +76,7 @@ Zainstaluj tylko te pakiety, których potrzebujesz:
 | `@ksefnik/core` | Zawsze — to główny SDK z silnikiem uzgadniania, parserami bankowymi i walidacją |
 | `@ksefnik/simulator` | Do developmentu i testów — symuluje API KSeF offline, bez potrzeby tokena |
 | `@ksefnik/mcp` | Gdy chcesz używać ksefnik z asystentami AI (Claude, Cursor, Windsurf) |
+| `@ksefnik/http` | Gdy łączysz się z prawdziwym API KSeF (produkcja/demo) — autentykacja, sesje, pobieranie faktur |
 | `@ksefnik/shared` | Instalowany automatycznie jako zależność `@ksefnik/core` |
 | `@ksefnik/cli` | Zwykle nie instalujesz — używasz gotowej binarki lub `npx` |
 
@@ -151,6 +161,7 @@ ksefnik/
 ├── packages/
 │   ├── shared/        # @ksefnik/shared — schematy Zod, typy
 │   ├── core/          # @ksefnik/core — SDK, silnik, parsery
+│   ├── http/          # @ksefnik/http — klient HTTP KSeF API v2
 │   ├── simulator/     # @ksefnik/simulator — mock KSeF
 │   └── mcp/           # @ksefnik/mcp — serwer MCP
 ├── apps/

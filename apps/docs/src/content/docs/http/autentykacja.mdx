@@ -1,0 +1,224 @@
+---
+title: Autentykacja KSeF 2.0
+description: Protokol challenge-response z szyfrowaniem RSA-OAEP SHA-256, sesje i odswiezanie tokenow.
+---
+
+import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components'
+
+Autentykacja w KSeF 2.0 opiera sie na protokole challenge-response z szyfrowaniem asymetrycznym. Klient szyfruje token KSeF kluczem publicznym Ministerstwa Finansow, a serwer weryfikuje tozsamosc i zwraca tokeny dostepu (access + refresh).
+
+## Schemat przeplywu
+
+```
+┌──────────┐                              ┌──────────┐
+│  Klient  │                              │ KSeF API │
+└────┬─────┘                              └────┬─────┘
+     │                                         │
+     │  1. POST /auth/challenge                │
+     │────────────────────────────────────────>│
+     │         { challenge, timestampMs }      │
+     │<────────────────────────────────────────│
+     │                                         │
+     │  2. RSA-OAEP(SHA-256) encrypt           │
+     │     "{ksefToken}|{timestampMs}"         │
+     │     kluczem publicznym MF               │
+     │                                         │
+     │  3. POST /auth/ksef-token               │
+     │     { challenge, encryptedToken, NIP }  │
+     │────────────────────────────────────────>│
+     │     { referenceNumber, authToken }      │
+     │<────────────────────────────────────────│
+     │                                         │
+     │  4. GET /auth/{referenceNumber}         │
+     │     (polling do status 200)             │
+     │────────────────────────────────────────>│
+     │     { status: { code: 200 } }           │
+     │<────────────────────────────────────────│
+     │                                         │
+     │  5. POST /auth/token/redeem             │
+     │     Authorization: Bearer authToken     │
+     │────────────────────────────────────────>│
+     │     { accessToken, refreshToken }       │
+     │<────────────────────────────────────────│
+     │                                         │
+     │  6. Zapytania z accessToken             │
+     │     Authorization: Bearer accessToken   │
+     │────────────────────────────────────────>│
+```
+
+## Kroki autentykacji
+
+<Steps>
+1. **Pobranie challenge** -- `POST /auth/challenge` zwraca losowy ciag `challenge` i timestamp w milisekundach (`timestampMs`). Endpoint nie wymaga autoryzacji.
+
+2. **Szyfrowanie tokenu** -- klient laczy token KSeF z timestampem w formacie `"{ksefToken}|{timestampMs}"` i szyfruje algorytmem RSA-OAEP z SHA-256, uzywajac klucza publicznego MF. Wynik kodowany jest w base64.
+
+3. **Wyslanie zaszyfrowanego tokenu** -- `POST /auth/ksef-token` z cielem zawierajacym `challenge`, `encryptedToken` i identyfikator NIP. Serwer zwraca `referenceNumber` i tymczasowy `authenticationToken`.
+
+4. **Polling statusu** -- `GET /auth/{referenceNumber}` odpytywany jest cyklicznie (co ~1s, max 30 prob) do momentu, gdy serwer zwroci `status.code === 200`. Serwer weryfikuje certyfikat (OCSP/CRL) po swojej stronie.
+
+5. **Wymiana na tokeny dostepu** -- `POST /auth/token/redeem` z `authenticationToken` w naglowku Authorization zwraca `accessToken` (krotkotrwaly) i `refreshToken` (dlugotrwaly).
+
+6. **Uzycie tokenow** -- `accessToken` uzywany jest w naglowku `Authorization: Bearer` do wszystkich zapytan API. Gdy zbliza sie wygasniecie, klient automatycznie odswierza go przy uzyciu `refreshToken`.
+</Steps>
+
+## Szyfrowanie RSA-OAEP
+
+Klucz publiczny MF pobierany jest automatycznie z endpointu `GET /security/public-key-certificates` przy pierwszym wywolaniu `initSession()`. Klient szuka certyfikatu z `usage: 'KsefTokenEncryption'` i aktywna data waznosci.
+
+```ts
+// Wewnetrzna implementacja szyfrowania
+import { constants, createPublicKey, publicEncrypt } from 'node:crypto'
+
+function rsaOaepEncrypt(plaintext: string, publicKeyPem: string): string {
+  const key = createPublicKey(publicKeyPem)
+  const data = Buffer.from(plaintext, 'utf8')
+  const encrypted = publicEncrypt(
+    { key, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' },
+    data,
+  )
+  return encrypted.toString('base64')
+}
+
+// Format: "{ksefToken}|{timestampMs}"
+const encryptedToken = rsaOaepEncrypt(
+  `${ksefToken}|${timestampMs}`,
+  publicKeyPem,
+)
+```
+
+<Aside type="caution">
+  Pole `timestampMs` musi byc dokladna wartoscia liczbowa z odpowiedzi `/auth/challenge`. Uzycie siostrzanego pola `timestamp` (ISO string) powoduje odrzucenie przez serwer.
+</Aside>
+
+## Klucz publiczny MF
+
+Klucz pobierany jest raz i cache'owany na czas zycia klienta. Mozesz tez podac go recznie:
+
+<Tabs>
+  <TabItem label="Auto-fetch (domyslnie)">
+    ```ts
+    const adapter = createHttpAdapter({
+      nip: '5213456784',
+      token: process.env.KSEF_TOKEN!,
+      environment: 'production',
+      // publicKeyPem pominiete -- auto-fetch z /security/public-key-certificates
+    })
+    ```
+  </TabItem>
+  <TabItem label="Pinned key">
+    ```ts
+    import { readFileSync } from 'node:fs'
+
+    const publicKeyPem = readFileSync('./mf-public-key.pem', 'utf8')
+
+    const adapter = createHttpAdapter({
+      nip: '5213456784',
+      token: process.env.KSEF_TOKEN!,
+      environment: 'production',
+      publicKeyPem, // klucz dostarczony recznie
+    })
+    ```
+  </TabItem>
+</Tabs>
+
+<Aside type="note">
+  Pinning klucza jest przydatny w srodowiskach offline lub gdy chcesz uniknac dodatkowego zapytania HTTP przy pierwszej sesji.
+</Aside>
+
+## Tokeny sesji
+
+Po pomyslnej autentykacji klient otrzymuje dwa tokeny:
+
+| Token | Czas zycia | Uzycie |
+|-------|-----------|--------|
+| `accessToken` | Krotki (minuty) | Autoryzacja zapytan API |
+| `refreshToken` | Dluzszy | Odnowienie `accessToken` bez re-autentykacji |
+
+### Automatyczne odswiezanie
+
+Klient sprawdza czas wygasniecia `accessToken` przed kazdym zapytaniem. Jesli do wygasniecia zostalo mniej niz 60 sekund, automatycznie wywoluje `POST /auth/token/refresh` z `refreshToken`:
+
+```ts
+function shouldRefresh(session: ActiveSession, now: Date = new Date()): boolean {
+  const bufferMs = 60_000 // 60 sekund
+  return session.accessExpiresAt.getTime() - now.getTime() <= bufferMs
+}
+```
+
+<Aside type="tip">
+  Odswiezanie jest transparentne -- nie musisz zarzadzac tokenami recznie. Klient robi to automatycznie w ramach kazdego wywolania `fetchInvoices()`.
+</Aside>
+
+## Zamykanie sesji
+
+Po zakonczeniu pracy sesje nalezy zamknac. Adapter robi to automatycznie w `closeSession()`:
+
+```ts
+const adapter = createHttpAdapter({
+  nip: '5213456784',
+  token: process.env.KSEF_TOKEN!,
+  environment: 'production',
+})
+
+const ksefnik = createKsefnik({ nip: '5213456784', adapter })
+
+try {
+  await ksefnik.invoices.sync({
+    dateFrom: '2026-03-01',
+    dateTo: '2026-03-31',
+  })
+} finally {
+  await adapter.closeSession()
+}
+```
+
+Zamykanie sesji wywoluje `DELETE /auth/sessions/current`. Bledy przy zamykaniu sa swiadomie ignorowane -- niepowodzenie revokacji nie powinno maskowac wyniku poprzednich operacji.
+
+## Pelny przyklad
+
+```ts
+import { createHttpAdapter } from '@ksefnik/http'
+import { createKsefnik } from '@ksefnik/core'
+
+async function main() {
+  const adapter = createHttpAdapter({
+    nip: '5213456784',
+    token: process.env.KSEF_TOKEN!,
+    environment: 'demo', // uzyj 'production' na produkcji
+    client: {
+      timeoutMs: 30_000,
+      retry: { maxAttempts: 3 },
+    },
+  })
+
+  const ksefnik = createKsefnik({
+    nip: '5213456784',
+    adapter,
+  })
+
+  try {
+    // initSession() wywolywane automatycznie -- challenge, szyfrowanie, polling, redeem
+    await ksefnik.invoices.sync({
+      dateFrom: '2026-03-01',
+      dateTo: '2026-03-31',
+    })
+
+    const invoices = await ksefnik.invoices.getAll()
+    console.log(`Pobrano ${invoices.length} faktur`)
+  } finally {
+    await adapter.closeSession()
+  }
+}
+```
+
+## Bledy autentykacji
+
+| Kod bledu | Znaczenie |
+|-----------|-----------|
+| `INVALID_CHALLENGE` | Odpowiedz `/auth/challenge` nie zawiera pola `challenge` |
+| `INVALID_CHALLENGE_TIMESTAMP` | Pole `timestampMs` jest nieprawidlowe lub brakujace |
+| `AUTH_FAILED` | Weryfikacja serwera zakonczona bledem (np. nieprawidlowy NIP lub token) |
+| `AUTH_POLL_TIMEOUT` | Polling `/auth/{ref}` przekroczyl 30 prob (30 sekund) |
+| `NO_PUBLIC_KEY` | Endpoint `/security/public-key-certificates` zwrocil pusta liste |
+| `NO_TOKEN_ENCRYPTION_KEY` | Brak certyfikatu z `usage: 'KsefTokenEncryption'` |

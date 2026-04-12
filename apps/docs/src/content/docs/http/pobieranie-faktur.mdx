@@ -1,0 +1,222 @@
+---
+title: Pobieranie faktur
+description: Pobieranie metadanych i XML faktur z KSeF -- paginacja, limity i wzbogacanie.
+---
+
+import { Aside, Tabs, TabItem, Steps } from '@astrojs/starlight/components'
+
+Metoda `fetchInvoices` w `KsefHttpClient` pobiera metadane faktur z endpointu `POST /invoices/query/metadata`, automatycznie obsluguje paginacje i opcjonalnie wzbogaca wyniki o pelne XML faktur.
+
+## Jak to dziala
+
+<Steps>
+1. **Zapytanie o metadane** -- `POST /invoices/query/metadata` z filtrem dat i typem podmiotu. Zwraca strone wynikow z polem `hasMore` i `isTruncated`.
+
+2. **Automatyczna paginacja** -- jesli `hasMore === true` i `isTruncated === false`, klient pobiera kolejne strony zwiekszajac `pageOffset`.
+
+3. **Mapowanie** -- metadane KSeF mapowane sa na typ `KsefRawInvoiceExt` z kwotami w groszach.
+
+4. **Opcjonalne XML** -- jesli `includeXml: true`, klient rownolegle pobiera pelne XML kazdej faktury z `GET /invoices/ksef/{ksefNumber}`.
+</Steps>
+
+## Podstawowe uzycie
+
+```ts
+import { createHttpAdapter } from '@ksefnik/http'
+import { createKsefnik } from '@ksefnik/core'
+
+const adapter = createHttpAdapter({
+  nip: '5213456784',
+  token: process.env.KSEF_TOKEN!,
+  environment: 'production',
+})
+
+const ksefnik = createKsefnik({ nip: '5213456784', adapter })
+
+await ksefnik.invoices.sync({
+  dateFrom: '2026-03-01',
+  dateTo: '2026-03-31',
+})
+
+const invoices = await ksefnik.invoices.getAll()
+```
+
+## Paginacja
+
+Klient automatycznie pobiera wszystkie strony wynikow. Mozesz kontrolowac rozmiar strony:
+
+| Parametr | Typ | Domyslnie | Opis |
+|----------|-----|-----------|------|
+| `pageSize` | `number` | `100` | Liczba faktur na strone |
+| `pageOffset` | `number` | `0` | Poczatkowy offset (numer strony * pageSize) |
+
+```ts
+// Nizkopoziomowe uzycie KsefHttpClient
+const client = new KsefHttpClient({ environment: 'production' })
+const session = await client.initSession({
+  nip: '5213456784',
+  token: process.env.KSEF_TOKEN!,
+  environment: 'production',
+})
+
+const result = await client.fetchInvoices({
+  token: session.token,
+  dateFrom: '2026-03-01',
+  dateTo: '2026-03-31',
+  pageSize: 50,
+})
+// result.invoices -- tablica KsefRawInvoice
+// result.total -- liczba pobranych faktur
+```
+
+### Logika paginacji
+
+Klient iteruje po stronach az do spelnienia jednego z warunkow:
+
+| Warunek | Akcja |
+|---------|-------|
+| `hasMore === false` | Koniec -- wszystkie wyniki pobrane |
+| Pusta strona (0 wynikow) | Koniec -- zabezpieczenie przed nieskonczona petla |
+| `hasMore === true`, `isTruncated === false` | Nastepna strona -- zwiekszenie `pageOffset` |
+| `hasMore === true`, `isTruncated === true` | Blad `QUERY_TRUNCATED` -- limit 10k rekordow |
+
+## Limit 10 000 rekordow
+
+<Aside type="caution">
+  KSeF API narzuca techniczny limit 10 000 rekordow na zapytanie. Jesli wynik przekroczy ten limit, serwer zwraca `isTruncated: true` i klient rzuca blad `QUERY_TRUNCATED`.
+</Aside>
+
+Rozwiazanie: zawez zakres dat i wykonaj kilka mniejszych zapytan.
+
+```ts
+import { KsefApiError } from '@ksefnik/http'
+
+try {
+  await ksefnik.invoices.sync({
+    dateFrom: '2026-01-01',
+    dateTo: '2026-12-31',
+  })
+} catch (error) {
+  if (
+    error instanceof KsefApiError &&
+    error.detailCode === 'QUERY_TRUNCATED'
+  ) {
+    // Podziel na miesiace
+    for (let month = 1; month <= 12; month++) {
+      const from = `2026-${String(month).padStart(2, '0')}-01`
+      const to = `2026-${String(month).padStart(2, '0')}-${month === 2 ? '28' : '30'}`
+      await ksefnik.invoices.sync({ dateFrom: from, dateTo: to })
+    }
+  }
+}
+```
+
+Blad `QUERY_TRUNCATED` zawiera kontekst z informacja o liczbie juz pobranych rekordow i dacie ostatniej faktury:
+
+```ts
+{
+  collected: 10000,
+  lastDate: '2026-06-15'
+}
+```
+
+## Typy podmiotu (subjectType)
+
+Parametr `subjectType` okresla role podatnika w zapytaniu:
+
+| Wartosc | Znaczenie |
+|---------|-----------|
+| `Subject1` | Faktury wystawione przez podatnika (sprzedaz) |
+| `Subject2` | Faktury otrzymane przez podatnika (zakupy) -- **domyslnie** |
+| `Subject3` | Faktury, w ktorych podatnik jest dodatkowym podmiotem |
+
+```ts
+const result = await client.fetchInvoices({
+  token: session.token,
+  dateFrom: '2026-03-01',
+  dateTo: '2026-03-31',
+  subjectType: 'Subject1', // moje faktury sprzedazowe
+})
+```
+
+## Typ daty (dateType)
+
+| Wartosc | Znaczenie |
+|---------|-----------|
+| `Invoicing` | Data wystawienia faktury -- **domyslnie** |
+
+Daty `dateFrom` i `dateTo` sa automatycznie konwertowane do formatu ISO 8601. Jesli podasz date bez czasu (np. `'2026-03-01'`), klient doda czas `T00:00:00.000Z` dla `dateFrom` i `T23:59:59.999Z` dla `dateTo`.
+
+## Wzbogacanie XML
+
+Domyslnie pobierane sa tylko metadane (NIP-y, kwoty, daty, numer KSeF). Metadane wystarczaja do wiekszosc przypadkow -- uzgadnianie, raporty, walidacja.
+
+Jesli potrzebujesz pelnego XML faktury (np. do parsowania pozycji), uzyj `includeXml: true`:
+
+<Tabs>
+  <TabItem label="Bez XML (domyslnie)">
+    ```ts
+    const result = await client.fetchInvoices({
+      token: session.token,
+      dateFrom: '2026-03-01',
+      dateTo: '2026-03-31',
+    })
+    // result.invoices[0].xml === ''
+    ```
+  </TabItem>
+  <TabItem label="Z XML">
+    ```ts
+    const result = await client.fetchInvoices({
+      token: session.token,
+      dateFrom: '2026-03-01',
+      dateTo: '2026-03-31',
+      includeXml: true,
+      concurrency: 3, // rownolegle pobieranie XML
+    })
+    // result.invoices[0].xml === '<Faktura>...</Faktura>'
+    ```
+  </TabItem>
+</Tabs>
+
+### Wspolbieznosc pobierania XML
+
+Parametr `concurrency` kontroluje ile zapytan o XML wykonywanych jest rownolegle:
+
+| Parametr | Domyslnie | Opis |
+|----------|-----------|------|
+| `concurrency` | `5` | Maksymalna liczba rownoczesnych zapytan GET o XML |
+
+<Aside type="caution">
+  Pamietaj o limitach rate KSeF (8 req/s). Ustawienie zbyt wysokiej wspolbieznosci moze prowadzic do bledow 429. Zalecana wartosc: 3-5.
+</Aside>
+
+Jesli pobranie XML pojedynczej faktury sie nie powiedzie, klient zwraca metadane bez XML (graceful degradation) -- nie przerywa calego procesu.
+
+## Mapowanie na KsefRawInvoiceExt
+
+Metadane KSeF mapowane sa na rozszerzony typ `KsefRawInvoiceExt`:
+
+```ts
+interface KsefRawInvoiceExt extends KsefRawInvoice {
+  grossAmountGrosze?: number  // kwota brutto w groszach
+  currency?: string           // waluta (domyslnie 'PLN')
+  buyerNip?: string           // NIP nabywcy
+  buyerName?: string          // nazwa nabywcy
+}
+```
+
+| Pole zrodlowe (KSeF) | Pole docelowe | Transformacja |
+|----------------------|---------------|---------------|
+| `meta.ksefNumber` | `ksefReferenceNumber` | bez zmian |
+| `meta.invoiceNumber` | `invoiceNumber` | bez zmian |
+| `meta.seller.nip` | `subjectNip` | fallback na `''` |
+| `meta.seller.name` | `subjectName` | opcjonalne |
+| `meta.invoicingDate` | `invoicingDate` | obciete do `YYYY-MM-DD` |
+| `meta.grossAmount` | `grossAmountGrosze` | `Math.round(amount * 100)` |
+| `meta.currency` | `currency` | fallback na `'PLN'` |
+| `meta.buyer.identifier.value` | `buyerNip` | opcjonalne |
+| `meta.buyer.name` | `buyerName` | opcjonalne |
+
+<Aside type="note">
+  Kwoty przeliczane sa na grosze (1 PLN = 100 groszy) zgodnie z konwencja calego SDK. Nigdy nie uzywamy zmiennoprzecinkowych dla pieniedzy.
+</Aside>

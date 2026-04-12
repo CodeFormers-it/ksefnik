@@ -1,0 +1,237 @@
+---
+title: Pipeline CI/CD
+description: Opis pipeline'ow GitHub Actions w projekcie ksefnik — CI, release, ochrona brancha prod i deploy dokumentacji.
+---
+
+import { Tabs, TabItem, Steps, Aside, Card, CardGrid } from '@astrojs/starlight/components'
+
+Ksefnik wykorzystuje 4 workflow GitHub Actions do automatyzacji budowania, testowania, publikacji i deploymentu dokumentacji.
+
+## Przegląd
+
+```
+                        ┌─────────────┐
+                        │   main      │
+                        └──────┬──────┘
+                               │
+                    PR do main │
+                               ▼
+                      ┌────────────────┐
+                      │   CI (ci.yml)  │
+                      │  build → test  │
+                      └────────────────┘
+                               │
+                          merge │
+                               ▼
+                        ┌─────────────┐
+                        │    main     │
+                        └──────┬──────┘
+                               │
+                    PR do prod │
+                               ▼
+                  ┌──────────────────────┐
+                  │ guard-prod.yml       │
+                  │ (org member check)   │
+                  └──────────┬───────────┘
+                             │
+                        merge│
+                             ▼
+┌───────────────────────────────────────────────────┐
+│              prod-release.yml                      │
+│  typecheck → test → bump → build → npm publish    │
+│  → tag → GitHub Release → sync PR prod→main       │
+└───────────────────────────────────────────────────┘
+                             │
+                             ▼
+                  ┌──────────────────────┐
+                  │  Sync PR prod→main   │
+                  │  (wersje w package   │
+                  │   .json)             │
+                  └──────────────────────┘
+
+          ───────── osobny flow ─────────
+
+              zmiana w apps/docs/**
+                        │
+                        ▼
+               ┌─────────────────┐
+               │  docs.yml       │
+               │  Docker build   │
+               │  → SSH deploy   │
+               └─────────────────┘
+```
+
+## 1. CI (ci.yml)
+
+Workflow odpowiedzialny za walidację kodu przy pull requestach do `main`.
+
+**Trigger:** pull request do `main`
+
+<Steps>
+1. Checkout kodu
+2. Instalacja pnpm i Node.js 22
+3. `pnpm install --frozen-lockfile`
+4. `pnpm build` — budowanie wszystkich pakietów
+5. `pnpm typecheck` — sprawdzenie typów
+6. `pnpm test -- --run` — uruchomienie testow Vitest
+</Steps>
+
+```yaml title=".github/workflows/ci.yml"
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: [self-hosted, codeformers]
+    strategy:
+      matrix:
+        node-version: [22]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm test -- --run
+```
+
+<Aside type="note">
+  Workflow dziala na self-hosted runnerze (`codeformers`), a nie na GitHub-hosted runners. Dzieki temu cache pnpm jest trwaly miedzy buildami.
+</Aside>
+
+## 2. Release do npm (prod-release.yml)
+
+Workflow publikujacy nowe wersje na npm. Uruchamia sie automatycznie po merge do brancha `prod`.
+
+**Trigger:** push do `prod` (= merge PR)
+
+<Steps>
+1. Checkout z pelna historia (`fetch-depth: 0`)
+2. Instalacja pnpm i Node.js 22 z `registry-url: https://registry.npmjs.org`
+3. `pnpm install --frozen-lockfile`
+4. `pnpm typecheck` — sprawdzenie typow
+5. `pnpm test -- --run` — uruchomienie testow
+6. `node scripts/bump-version.mjs minor` — podbicie wersji minor we wszystkich pakietach
+7. `pnpm -r build` — budowanie wszystkich pakietow
+8. `pnpm -r publish --access public --provenance --no-git-checks` — publikacja na npm
+9. Commit wersji + tag `v{version}` + push do `prod`
+10. Utworzenie GitHub Release z automatycznie generowanymi notatkami
+11. Otwarcie sync PR `prod → main` z nowymi wersjami
+</Steps>
+
+<Aside type="caution">
+  Workflow ma warunek `if: github.actor != 'github-actions[bot]'`, zeby nie wchodzic w nieskonczona petle — bot pushuje commit z wersja, co samo w sobie jest pushem do `prod`.
+</Aside>
+
+### Uprawnienia
+
+Workflow wymaga trzech uprawnien:
+
+| Uprawnienie | Cel |
+|-------------|-----|
+| `contents: write` | Push commita, taga i tworzenie release |
+| `id-token: write` | Provenance signing przy npm publish |
+| `pull-requests: write` | Otwarcie sync PR prod → main |
+
+### Provenance
+
+Flaga `--provenance` przy `npm publish` generuje podpisany atest SLSA, ktory laczy opublikowana paczke z konkretnym commitem i workflow. Uzytkownik moze zweryfikowac zrodlo paczki na stronie npm.
+
+## 3. Guard prod (guard-prod.yml)
+
+Ochrona brancha `prod` przed PR-ami od osob spoza organizacji.
+
+**Trigger:** otwarcie PR do `prod` (`pull_request_target`)
+
+<Steps>
+1. Sprawdzenie czlonkostwa autora PR w organizacji `CodeFormers-it` przez GitHub API
+2. Jesli autor **nie jest** czlonkiem — zamkniecie PR z komentarzem
+3. Jesli autor **jest** czlonkiem — PR przechodzi dalej
+</Steps>
+
+```yaml title="Sprawdzenie czlonkostwa"
+STATUS=$(gh api orgs/CodeFormers-it/members/$AUTHOR \
+  --silent -i 2>&1 | head -1 | grep -o '[0-9]\{3\}')
+
+if [ "$STATUS" != "204" ]; then
+  gh pr close $PR_NUMBER \
+    --comment "PRs to \`prod\` are restricted to org members.
+    Please open your PR against \`main\` instead."
+fi
+```
+
+<Aside type="tip">
+  Uzycie `pull_request_target` zamiast `pull_request` jest celowe — pozwala na wykonanie akcji z uprawnieniami repo (zamkniecie PR) nawet gdy PR pochodzi z forka.
+</Aside>
+
+## 4. Deploy dokumentacji (docs.yml)
+
+Budowanie i deployment strony dokumentacji na VPS.
+
+**Trigger:**
+- PR ze zmianami w `apps/docs/**`, `packages/shared/src/schemas/**`, `docker/docs.Dockerfile` lub `docker/nginx-docs.conf`
+- Reczny dispatch (`workflow_dispatch`) z opcja deploy
+
+<Steps>
+1. Checkout kodu
+2. Build obrazu Docker przez `./scripts/build-and-push.sh`
+3. (Opcjonalnie) Deploy na VPS przez SSH: `./scripts/deploy.sh`
+</Steps>
+
+```yaml title=".github/workflows/docs.yml"
+on:
+  pull_request:
+    paths:
+      - 'apps/docs/**'
+      - 'packages/shared/src/schemas/**'
+      - 'docker/docs.Dockerfile'
+      - 'docker/nginx-docs.conf'
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy to VPS after build'
+        type: boolean
+        default: true
+```
+
+<Aside type="note">
+  Deploy wykonuje sie **tylko** przy recznym uruchomieniu z opcja `deploy: true`. PR-y uruchamiaja jedynie build, zeby zweryfikowac, ze dokumentacja sie buduje.
+</Aside>
+
+## Podsumowanie
+
+<CardGrid>
+  <Card title="CI" icon="approve-check">
+    Walidacja kazdego PR do `main` — build, typecheck, testy.
+  </Card>
+  <Card title="Release" icon="rocket">
+    Automatyczna publikacja na npm po merge do `prod`.
+  </Card>
+  <Card title="Guard" icon="warning">
+    Ochrona `prod` przed PR-ami spoza organizacji.
+  </Card>
+  <Card title="Docs" icon="document">
+    Build dokumentacji Docker + deploy na VPS.
+  </Card>
+</CardGrid>
+
+## Self-hosted runner
+
+Wszystkie workflow (poza `guard-prod`) dzialaja na self-hosted runnerze z labelami `[self-hosted, codeformers]`. Runner dziala na Mac mini w biurze CodeFormers.
+
+Zalety:
+- **Szybki cache** — pnpm store jest trwaly miedzy buildami
+- **Zero kosztow** — brak oplat za minuty GitHub Actions
+- **Pelna kontrola** — mozliwosc instalacji dowolnych narzedzi (Docker, SSH)
+
+Wady:
+- **Single point of failure** — jesli runner jest niedostepny, buildy stoja w kolejce
+- **Brak izolacji** — workspace jest wspoldzielony miedzy buildami

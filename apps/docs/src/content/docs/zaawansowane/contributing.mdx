@@ -1,0 +1,232 @@
+---
+title: Contributing guide
+description: Jak wnieść wkład do projektu ksefnik — konfiguracja środowiska, konwencje kodu i proces PR.
+---
+
+import { Tabs, TabItem, Steps, Aside, Card, CardGrid } from '@astrojs/starlight/components'
+
+Ksefnik jest projektem open-source i przyjmujemy kontrybucje. Ten przewodnik opisuje jak skonfigurować środowisko, jakich konwencji przestrzegamy i jak wygląda proces review.
+
+## Pierwsze kroki
+
+<Steps>
+1. **Forkuj repozytorium** na GitHubie — kliknij "Fork" na stronie [CodeFormers-it/ksefnik](https://github.com/CodeFormers-it/ksefnik).
+
+2. **Sklonuj swojego forka:**
+   ```bash
+   git clone https://github.com/YOUR-USER/ksefnik.git
+   cd ksefnik
+   ```
+
+3. **Zainstaluj zależności** (wymagany pnpm i Node.js 22+):
+   ```bash
+   pnpm install
+   ```
+
+4. **Zbuduj wszystkie pakiety:**
+   ```bash
+   pnpm build
+   ```
+
+5. **Uruchom testy** — upewnij się, że wszystko przechodzi:
+   ```bash
+   pnpm test
+   ```
+
+6. **Utwórz branch** dla swojej zmiany:
+   ```bash
+   git checkout -b feature/my-feature
+   ```
+</Steps>
+
+<Aside type="tip">
+  Używamy pliku `.nvmrc` z wersją Node.js 22. Jeśli korzystasz z nvm, wystarczy `nvm use` w katalogu projektu.
+</Aside>
+
+## Struktura monorepo
+
+Ksefnik to monorepo pnpm workspace. Każdy pakiet ma jasno określoną odpowiedzialność:
+
+<CardGrid>
+  <Card title="@ksefnik/shared" icon="puzzle">
+    Schematy Zod, typy TypeScript, interfejsy pluginów. Fundament bez zależności runtime (poza `zod`).
+  </Card>
+  <Card title="@ksefnik/core" icon="rocket">
+    Fasada SDK, silnik uzgadniania (6-pass pipeline), parsery bankowe. Cała logika biznesowa.
+  </Card>
+  <Card title="@ksefnik/http" icon="external">
+    Klient HTTP do KSeF API v2 — retry, cache, adapter pattern.
+  </Card>
+  <Card title="@ksefnik/simulator" icon="setting">
+    Offline mock KSeF API do testów — scenariusze happy path, timeout, expired session.
+  </Card>
+  <Card title="@ksefnik/mcp" icon="laptop">
+    Serwer MCP (Model Context Protocol) — cienka warstwa na `@ksefnik/core`.
+  </Card>
+  <Card title="@ksefnik/cli" icon="terminal">
+    CLI (Commander.js + @clack/prompts) → kompilowane do standalone binary przez Bun.
+  </Card>
+</CardGrid>
+
+```
+ksefnik/
+├── packages/
+│   ├── shared/        @ksefnik/shared     — Schematy Zod, typy, interfejsy pluginów
+│   ├── core/          @ksefnik/core       — Fasada SDK, silnik uzgadniania, parsery bankowe
+│   ├── http/          @ksefnik/http       — Klient HTTP do KSeF API v2
+│   ├── simulator/     @ksefnik/simulator  — Offline mock KSeF API
+│   └── mcp/           @ksefnik/mcp        — Serwer MCP (cienka warstwa na core)
+├── apps/
+│   ├── cli/           @ksefnik/cli        — CLI → standalone binary
+│   └── docs/          Dokumentacja        — Astro Starlight
+├── pnpm-workspace.yaml
+├── package.json
+└── vitest.workspace.ts
+```
+
+## Komendy deweloperskie
+
+| Komenda | Opis |
+|---------|------|
+| `pnpm dev` | Watch mode dla wszystkich pakietów |
+| `pnpm build` | Budowanie wszystkich pakietów |
+| `pnpm test` | Uruchomienie Vitest |
+| `pnpm typecheck` | Sprawdzenie typów we wszystkich pakietach |
+
+## Konwencje kodu
+
+### TypeScript strict
+
+Cały kod jest pisany w TypeScript z włączonym `strict` mode. Nie używamy `any` — jeśli typ jest nieznany, używamy `unknown` i walidujemy przez Zod.
+
+### Zod na modelach domenowych
+
+Wszystkie modele domenowe (faktura, transakcja bankowa, wynik dopasowania) to schematy Zod. Typy TypeScript inferujemy z nich:
+
+```typescript
+import { z } from 'zod'
+
+export const InvoiceSchema = z.object({
+  ksefId: z.string(),
+  nip: z.string(),
+  amount: z.number().int(), // grosze!
+  issueDate: z.string(),
+})
+
+export type Invoice = z.infer<typeof InvoiceSchema>
+```
+
+### Kwoty w groszach
+
+Wszystkie kwoty przechowujemy jako liczby całkowite w groszach (1 PLN = 100 groszy). Nigdy nie używamy `float` do pieniędzy.
+
+```typescript
+// Dobrze
+const amount = 12345 // 123,45 PLN
+
+// Źle
+const amount = 123.45
+```
+
+<Aside type="caution">
+  Jeśli Twój kod operuje na kwotach, zawsze sprawdź, czy przechodzisz grosze (integer), nie złotówki (float). Testy z kwotami zmiennoprzecinkowymi nie przejdą review.
+</Aside>
+
+### ESM only
+
+Projekt używa wyłącznie ESM (`"type": "module"` w `package.json`). Nie używamy `require()`.
+
+### Formatowanie
+
+Używamy Prettier bez ESLint. Przed commitem uruchom:
+
+```bash
+pnpm prettier --write .
+```
+
+## Proces PR
+
+<Steps>
+1. **Target branch** — wszystkie PR-y celują w `main`.
+
+2. **CI musi przejść** — pipeline sprawdza build, typecheck i testy. PR z czerwonym CI nie przejdzie review.
+
+3. **Review** — PRy przegląda @luke-cf (CODEOWNERS). Typowy czas review: 1-2 dni robocze.
+
+4. **Conventional commits** — używamy prefiksów w wiadomościach commitów:
+
+   | Prefix | Kiedy |
+   |--------|-------|
+   | `feat` | Nowa funkcjonalność |
+   | `fix` | Poprawka buga |
+   | `refactor` | Zmiana kodu bez zmiany zachowania |
+   | `docs` | Zmiany w dokumentacji |
+   | `test` | Dodanie lub zmiana testów |
+   | `chore` | Zmiany w konfiguracji, CI, tooling |
+
+   ```bash
+   git commit -m "feat: add ING CSV parser"
+   git commit -m "fix: handle empty NIP in bank transaction"
+   git commit -m "docs: add contributing guide"
+   ```
+</Steps>
+
+<Aside type="tip">
+  Jedno logiczne zadanie = jeden commit. Nie łącz poprawki buga z nową funkcjonalnością w jednym commicie.
+</Aside>
+
+## Czego NIE kontrybuować
+
+Poniższe zmiany nie zostaną zaakceptowane — nie dlatego, że są złe, ale dlatego, że wykraczają poza scope projektu:
+
+- **Web dashboard** — ksefnik to SDK dla deweloperów, nie aplikacja z UI
+- **Integracje z Google Drive / storage** — nie rozwiązujemy problemu przechowywania plików
+- **Wszystkie 87 reguł walidacji KSeF** — implementujemy top 20 o największym znaczeniu biznesowym
+- **Migracja na Turborepo** — overkill dla 5-6 pakietów, pnpm workspace wystarcza
+
+<Aside type="note">
+  Jeśli nie jesteś pewien, czy Twój pomysł mieści się w scope, otwórz **Discussion** na GitHubie zanim zaczniesz kodować. Zaoszczędzisz czas sobie i nam.
+</Aside>
+
+## Tworzenie pluginów
+
+Pluginy to najlepszy sposób na rozszerzenie ksefnik bez modyfikacji core. Każdy plugin implementuje interfejs `KsefPlugin` z `@ksefnik/shared`:
+
+```typescript
+import type { KsefPlugin, ReconciliationPass } from '@ksefnik/shared'
+
+const myPlugin: KsefPlugin = {
+  name: '@my-org/ksefnik-custom-pass',
+  version: '1.0.0',
+
+  reconciliationPasses: [
+    {
+      name: 'payment-pattern-match',
+      order: 650, // Pluginy: order 600+
+      async execute(invoices, transactions, existingMatches) {
+        // Twoja logika dopasowania
+        return newMatches
+      },
+    },
+  ],
+}
+
+export default myPlugin
+```
+
+### Zasady pluginów
+
+- **Order >= 600** — passy core mają order 100-500. Pluginy uruchamiają się po nich, nigdy nie zastępują wbudowanych passów.
+- **Zero DRM** — model "plugin by absence" oznacza, że brak pakietu = darmowa wersja. Nie dodawaj sprawdzania licencji ani phone-home.
+- **Osobne repozytorium** — pluginy żyją poza monorepo ksefnik. Publikujesz je jako osobne pakiety npm.
+
+<Aside type="caution">
+  PR-y dodające sprawdzanie licencji, phone-home lub jakiekolwiek ograniczenia DRM w runtime zostaną natychmiast odrzucone. To fundamentalna zasada projektu.
+</Aside>
+
+## Przydatne linki
+
+- [Architektura monorepo](/zaawansowane/architektura-monorepo) — szczegółowy opis struktury i zależności
+- [System pluginów](/przewodniki/system-pluginow) — pełny przewodnik po tworzeniu pluginów
+- [Plugin by absence](/zaawansowane/plugin-by-absence) — filozofia monetyzacji bez DRM
+- [Własne passy uzgadniania](/silnik-uzgadniania/wlasne-passy) — jak implementować ReconciliationPass
