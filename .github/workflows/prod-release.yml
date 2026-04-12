@@ -36,6 +36,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Build all packages
+        run: pnpm -r build
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -46,9 +49,6 @@ jobs:
 
       - name: Bump minor versions in all packages
         run: node scripts/bump-version.mjs minor
-
-      - name: Build all packages
-        run: pnpm -r build
 
       - name: Publish to npm
         run: pnpm -r publish --access public --provenance --no-git-checks
