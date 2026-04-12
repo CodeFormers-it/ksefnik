@@ -1,6 +1,6 @@
 {
   "name": "@ksefnik/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Command-line interface for Ksefnik — fetch KSeF invoices, reconcile with bank statements, run MCP server",
   "license": "MIT",
   "author": "CodeFormers",
