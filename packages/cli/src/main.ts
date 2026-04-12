@@ -34,8 +34,15 @@ export function createProgram(): Command {
   return program
 }
 
-createProgram().parseAsync(process.argv).catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error)
-  process.stderr.write(`ksefnik: ${message}\n`)
-  process.exit(1)
-})
+const isDirectRun =
+  process.argv[1]?.endsWith('/main.js') ||
+  process.argv[1]?.endsWith('/main.ts') ||
+  process.argv[1]?.endsWith('/ksefnik')
+
+if (isDirectRun) {
+  createProgram().parseAsync(process.argv).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error)
+    process.stderr.write(`ksefnik: ${message}\n`)
+    process.exit(1)
+  })
+}

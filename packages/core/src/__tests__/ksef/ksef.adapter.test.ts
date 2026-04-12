@@ -92,6 +92,7 @@ describe('KsefAdapterImpl', () => {
         dateFrom: '2026-03-01',
         dateTo: '2026-03-31',
         subjectNip: undefined,
+        subjectType: 'Subject2',
         pageSize: undefined,
         pageOffset: undefined,
       })
