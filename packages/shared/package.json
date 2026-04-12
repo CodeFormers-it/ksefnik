@@ -1,6 +1,6 @@
 {
   "name": "@ksefnik/shared",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Shared Zod schemas and types for the Ksefnik SDK (Polish KSeF e-Invoice reconciliation)",
   "license": "MIT",
   "author": "CodeFormers",
@@ -37,7 +37,13 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "!dist/**/__tests__", "!dist/**/*.test.*", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "!dist/**/__tests__",
+    "!dist/**/*.test.*",
+    "README.md",
+    "LICENSE"
+  ],
   "publishConfig": {
     "access": "public"
   },

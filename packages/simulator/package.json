@@ -1,6 +1,6 @@
 {
   "name": "@ksefnik/simulator",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Offline KSeF mock server for testing and development without hitting the real Ministry of Finance API",
   "license": "MIT",
   "author": "CodeFormers",
@@ -41,7 +41,13 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "!dist/**/__tests__", "!dist/**/*.test.*", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "!dist/**/__tests__",
+    "!dist/**/*.test.*",
+    "README.md",
+    "LICENSE"
+  ],
   "publishConfig": {
     "access": "public"
   },
