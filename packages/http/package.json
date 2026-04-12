@@ -1,6 +1,6 @@
 {
   "name": "@ksefnik/http",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "KSeF HTTP adapter — authentication, challenge, sessions, invoice fetch (Polish e-Invoice API v2)",
   "license": "MIT",
   "author": "CodeFormers",
