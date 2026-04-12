@@ -80,12 +80,12 @@ describe('InvoiceSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('rejects zero grossAmount', () => {
+  it('accepts zero grossAmount (e.g. correction invoices)', () => {
     const result = InvoiceSchema.safeParse({
       ...validInvoice,
       grossAmount: 0,
     })
-    expect(result.success).toBe(false)
+    expect(result.success).toBe(true)
   })
 
   it('rejects missing required fields', () => {
