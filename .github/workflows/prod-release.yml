@@ -77,6 +77,42 @@ jobs:
           name: v${{ steps.tag.outputs.version }}
           generate_release_notes: true
 
+      - name: Build docs Docker image (tagged with npm version)
+        run: |
+          VERSION="${{ steps.tag.outputs.version }}"
+          GIT_SHA=$(git rev-parse --short HEAD)
+
+          DOCKER_CONFIG_DIR="$(mktemp -d)"
+          trap 'rm -rf "$DOCKER_CONFIG_DIR"' EXIT
+          AUTH_TOKEN=$(printf 'codeformers-it:%s' "${{ secrets.REPO_TOKEN_GITHUB_PAT }}" | base64)
+          cat > "$DOCKER_CONFIG_DIR/config.json" << DOCKEREOF
+          {"auths":{"ghcr.io":{"auth":"${AUTH_TOKEN}"}},"credsStore":""}
+          DOCKEREOF
+          if [ -d "$HOME/.docker/cli-plugins" ]; then
+            ln -sf "$HOME/.docker/cli-plugins" "$DOCKER_CONFIG_DIR/cli-plugins"
+          fi
+          export DOCKER_CONFIG="$DOCKER_CONFIG_DIR"
+
+          BUILD_ARGS=""
+          if [ -n "${PRO_REPO_TOKEN:-}" ]; then
+            BUILD_ARGS="--build-arg PRO_REPO_TOKEN=${PRO_REPO_TOKEN}"
+          fi
+
+          docker buildx build \
+            --platform linux/amd64 \
+            --push \
+            -f docker/docs.Dockerfile \
+            -t "ghcr.io/codeformers-it/ksefnik-docs:latest" \
+            -t "ghcr.io/codeformers-it/ksefnik-docs:v${VERSION}" \
+            -t "ghcr.io/codeformers-it/ksefnik-docs:${GIT_SHA}" \
+            $BUILD_ARGS \
+            .
+        env:
+          PRO_REPO_TOKEN: ${{ secrets.PRO_REPO_TOKEN }}
+
+      - name: Deploy docs to VPS
+        run: ssh codeformers "cd /home/ubuntu/ksefnik.pl && ./scripts/deploy.sh"
+
       - name: Open sync PR prod → main
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

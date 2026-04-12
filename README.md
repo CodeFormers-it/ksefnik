@@ -40,27 +40,27 @@ Projekt jest na wczesnym etapie rozwoju — API może się zmieniać między wer
 
 ### Reconciliation Engine
 
-Automatyczne dopasowywanie faktur KSeF do przelewow bankowych w 6 krokach: numer KSeF, dokladne dopasowanie NIP + kwota, numer faktury w tytule przelewu, przyblizone dopasowanie nazwy (fuzzy matching), platnosci czesciowe, dopasowanie bliskosci.
+Automatyczne dopasowywanie faktur KSeF do przelewow bankowych w 6 krokach: numer KSeF, dokladne dopasowanie NIP + kwota, numer faktury w tytule przelewu, przyblizone dopasowanie nazwy (fuzzy matching), platnosci czesciowe, dopasowanie bliskosci. [Dokumentacja →](https://docs.ksefnik.pl/silnik-uzgadniania/jak-dziala-pipeline/)
 
 ### Bank Parsers
 
-Import wyciagow z polskich bankow: MT940 (standard), CSV z mBank, ING, PKO BP, Santander. Automatyczna detekcja formatu pliku. Ekstrakcja NIP z tytulow przelewow.
+Import wyciagow z polskich bankow: MT940 (standard), CSV z mBank, ING, PKO BP, Santander. Automatyczna detekcja formatu pliku. Ekstrakcja NIP z tytulow przelewow. [Dokumentacja →](https://docs.ksefnik.pl/parsery-bankowe/obslugiwane-formaty/)
 
 ### HTTP Adapter (`@ksefnik/http`)
 
-Produkcyjny klient HTTP do KSeF 2.0 (`api.ksef.mf.gov.pl`). Pelny flow uwierzytelnienia (challenge + RSA-OAEP), pobieranie metadanych faktur, parsowanie FA(2)/FA(3) XML, ekstrakcja kwot brutto. Gotowy do podpiecia pod `createKsefnik()` przez `createHttpAdapter({ nip, token, environment, publicKeyPem })`. Szczegoly: [packages/http/README.md](packages/http/README.md).
+Produkcyjny klient HTTP do KSeF 2.0 (`api.ksef.mf.gov.pl`). Pelny flow uwierzytelnienia (challenge + RSA-OAEP), pobieranie metadanych faktur, parsowanie FA(2)/FA(3) XML, ekstrakcja kwot brutto. Gotowy do podpiecia pod `createKsefnik()` przez `createHttpAdapter({ nip, token, environment, publicKeyPem })`. Szczegoly: [packages/http/README.md](packages/http/README.md). [Dokumentacja →](https://docs.ksefnik.pl/http/przeglad/)
 
 ### KSeF Simulator
 
-Lokalny mock serwer KSeF do testow offline. Deterministyczny, bez polaczenia z Ministerstwem Finansow. Gotowe scenariusze: happy-path, timeout, odrzucenie faktury, wygasniecie sesji.
+Lokalny mock serwer KSeF do testow offline. Deterministyczny, bez polaczenia z Ministerstwem Finansow. Gotowe scenariusze: happy-path, timeout, odrzucenie faktury, wygasniecie sesji. [Dokumentacja →](https://docs.ksefnik.pl/symulator/happy-path/)
 
 ### MCP Server
 
-Model Context Protocol server (8 narzedzi) do integracji z Claude i innymi asystentami AI. Reconcyliacja, import wyciagow i zapytania o faktury bezposrednio z poziomu AI.
+Model Context Protocol server (9 narzedzi) do integracji z Claude i innymi asystentami AI. Reconcyliacja, import wyciagow i zapytania o faktury bezposrednio z poziomu AI. [Dokumentacja →](https://docs.ksefnik.pl/mcp/konfiguracja/)
 
 ### Walidacja faktur
 
-Walidacja faktur przed wyslaniem do KSeF. Reguly biznesowe Ministerstwa Finansow z czytelnymi komunikatami bledow po polsku.
+Walidacja faktur przed wyslaniem do KSeF. Reguly biznesowe Ministerstwa Finansow z czytelnymi komunikatami bledow po polsku. [Dokumentacja →](https://docs.ksefnik.pl/walidacja/mechanizm/)
 
 ### Type-Safe SDK
 
@@ -110,6 +110,8 @@ await adapter.closeSession?.()
 
 ## Szybki start
 
+> Pelny przewodnik krok po kroku: [docs.ksefnik.pl/wprowadzenie/szybki-start](https://docs.ksefnik.pl/wprowadzenie/szybki-start/)
+
 ```typescript
 import { createKsefnik } from '@ksefnik/core'
 
@@ -138,6 +140,8 @@ console.log(`Niedopasowane przelewy: ${report.unmatchedTransactions.length}`)
 
 ## Architektura
 
+> Szczegolowy opis architektury monorepo: [docs.ksefnik.pl/zaawansowane/architektura-monorepo](https://docs.ksefnik.pl/zaawansowane/architektura-monorepo/)
+
 Ksefnik stosuje podejscie SDK-first -- cala logika biznesowa znajduje sie w pakiecie `core`, a pozostale pakiety (CLI, MCP server) sa cienkimi wrapperami, ktore z niego korzystaja.
 
 ```
@@ -145,6 +149,7 @@ ksefnik/
   packages/
     shared/       @ksefnik/shared      Typy Zod, interfejsy, plugin system
     core/         @ksefnik/core        Reconciliation engine, bank parsers, KSeF adapter
+    http/         @ksefnik/http        Produkcyjny klient HTTP do KSeF API v2
     simulator/    @ksefnik/simulator   Offline KSeF test harness
     mcp/          @ksefnik/mcp         MCP server (wrapper na core)
     cli/          @ksefnik/cli         CLI (Commander.js), standalone binary via bun compile
@@ -154,36 +159,80 @@ ksefnik/
 |--------|------|
 | `@ksefnik/shared` | Wspoldzielone typy Zod, interfejsy i plugin system |
 | `@ksefnik/core` | Glowna logika: reconciliation engine, bank parsers, adapter KSeF |
+| `@ksefnik/http` | Produkcyjny klient HTTP do KSeF 2.0 (auth RSA-OAEP, sesje, pobieranie faktur) |
 | `@ksefnik/simulator` | Lokalny mock serwer KSeF do testow offline |
 | `@ksefnik/mcp` | Model Context Protocol server -- integracja z AI |
 | `@ksefnik/cli` | Interfejs wiersza polecen, kompilacja do standalone binary |
 
 ## MCP Server
 
-MCP server umozliwia korzystanie z Ksefnik bezposrednio z Claude Desktop lub dowolnego klienta obslugujacego Model Context Protocol.
+MCP server udostępnia 9 narzędzi (reconcyliacja, import wyciągów, zapytania o faktury, walidacja, wysyłka, UPO) bezpośrednio z poziomu Claude Desktop, Cursor, Claude Code i innych klientów MCP.
 
-### Konfiguracja Claude Desktop
+### Claude Desktop
 
-Dodaj ponizszy wpis do pliku konfiguracyjnego Claude Desktop (`claude_desktop_config.json`):
+Dodaj do `claude_desktop_config.json` (`~/Library/Application Support/Claude/claude_desktop_config.json` na macOS):
 
 ```json
 {
   "mcpServers": {
     "ksefnik": {
-      "command": "ksefnik",
-      "args": ["mcp"]
+      "command": "npx",
+      "args": ["-y", "@ksefnik/mcp"],
+      "env": {
+        "KSEF_NIP": "7010002137",
+        "KSEF_TOKEN": "twoj-token-ksef",
+        "KSEF_ENV": "test"
+      }
     }
   }
 }
 ```
 
-Serwer udostepnia 8 narzedzi obejmujacych reconcyliacje, import wyciagow bankowych oraz zapytania o faktury.
+### Cursor
 
-### Uruchomienie reczne
+Dodaj do `.cursor/mcp.json` w katalogu projektu:
+
+```json
+{
+  "mcpServers": {
+    "ksefnik": {
+      "command": "npx",
+      "args": ["-y", "@ksefnik/mcp"],
+      "env": {
+        "KSEF_NIP": "7010002137",
+        "KSEF_TOKEN": "twoj-token-ksef",
+        "KSEF_ENV": "test"
+      }
+    }
+  }
+}
+```
+
+### Claude Code
 
 ```bash
-npx @ksefnik/cli mcp
+claude mcp add ksefnik -- npx -y @ksefnik/mcp
 ```
+
+### Uruchomienie ręczne
+
+```bash
+npx @ksefnik/mcp
+```
+
+### Dostępne narzędzia
+
+| Narzędzie | Opis |
+|-----------|------|
+| `sync-invoices` | Pobierz faktury z KSeF |
+| `query-invoices` | Wyszukaj faktury |
+| `import-bank` | Importuj wyciąg bankowy |
+| `reconcile` | Uruchom reconcyliację |
+| `get-unmatched` | Pokaż niedopasowane pozycje |
+| `send-invoice` | Wyślij fakturę do KSeF |
+| `validate-invoice` | Waliduj fakturę |
+| `confirm-match` | Potwierdź dopasowanie |
+| `get-upo` | Sprawdź status UPO (potwierdzenie odbioru) |
 
 ## Stack technologiczny
 
@@ -220,6 +269,8 @@ pnpm test:watch     # tryb watch
 ```
 
 ### Wytyczne dla Pull Requestow
+
+> Pelny przewodnik dla kontrybutorów: [docs.ksefnik.pl/zaawansowane/contributing](https://docs.ksefnik.pl/zaawansowane/contributing/)
 
 1. Stworz branch z opisowa nazwa (`feat/partial-payments`, `fix/mt940-parser`).
 2. Upewnij sie, ze wszystkie testy przechodza (`pnpm test`).

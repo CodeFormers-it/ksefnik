@@ -1,0 +1,32 @@
+name: Guard prod branch
+
+# Auto-close PRs targeting prod from non-org members.
+# Only org members can open PRs to prod.
+
+on:
+  pull_request_target:
+    branches: [prod]
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check org membership
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          AUTHOR="${{ github.event.pull_request.user.login }}"
+          STATUS=$(gh api orgs/CodeFormers-it/members/$AUTHOR --silent -i 2>&1 | head -1 | grep -o '[0-9]\{3\}')
+
+          if [ "$STATUS" != "204" ]; then
+            gh pr close ${{ github.event.pull_request.number }} \
+              --repo ${{ github.repository }} \
+              --comment "PRs to \`prod\` are restricted to org members. Please open your PR against \`main\` instead."
+            echo "Closed PR #${{ github.event.pull_request.number }} from external contributor $AUTHOR"
+          else
+            echo "$AUTHOR is an org member — PR allowed"
+          fi

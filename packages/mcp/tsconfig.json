@@ -7,6 +7,8 @@
   "include": ["src"],
   "references": [
     { "path": "../shared" },
-    { "path": "../core" }
+    { "path": "../core" },
+    { "path": "../http" },
+    { "path": "../simulator" }
   ]
 }

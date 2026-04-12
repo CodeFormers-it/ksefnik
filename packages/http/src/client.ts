@@ -16,6 +16,8 @@ import {
   type ActiveSession,
 } from './session.js'
 import { fetchInvoices as fetchInvoicesHttp } from './invoices.js'
+import { fetchUpoXml } from './upo.js'
+import { KsefApiError } from './errors.js'
 import { fetchKsefTokenEncryptionKey } from './public-key.js'
 
 export interface KsefHttpClientOptions {
@@ -161,7 +163,40 @@ export class KsefHttpClient implements KsefClient {
     )
   }
 
-  async getUpo(): Promise<{ xml: string; status: 'confirmed' | 'pending' | 'rejected' }> {
-    throw new Error('KsefHttpClient.getUpo: not implemented in HTTP client MVP')
+  async getUpo(params: {
+    token: string
+    ksefReferenceNumber: string
+  }): Promise<{ xml: string; status: 'confirmed' | 'pending' | 'rejected' }> {
+    let session = decodeSessionToken(params.token)
+    if (!session) {
+      throw new Error('KsefHttpClient.getUpo: invalid session token')
+    }
+    if (shouldRefresh(session)) {
+      session = await withHttpRetry(
+        () => refreshAccessToken(this.http, session as ActiveSession),
+        this.retryOpts,
+      )
+    }
+
+    // Try fetching UPO XML directly. If the invoice is still processing,
+    // KSeF returns 400 with code 21178 — we catch that and return 'pending'.
+    try {
+      const xml = await withHttpRetry(
+        () =>
+          fetchUpoXml(this.http, {
+            accessToken: session!.accessToken,
+            sessionReferenceNumber: session!.referenceNumber,
+            ksefNumber: params.ksefReferenceNumber,
+          }),
+        this.retryOpts,
+      )
+      return { xml, status: 'confirmed' }
+    } catch (error: unknown) {
+      // KSeF returns 400 with code 21178 when UPO is not yet available
+      if (error instanceof KsefApiError && error.detailCode === '21178') {
+        return { xml: '', status: 'pending' }
+      }
+      throw error
+    }
   }
 }

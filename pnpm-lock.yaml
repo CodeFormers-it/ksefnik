@@ -82,19 +82,19 @@ importers:
         specifier: ^0.10
         version: 0.10.1
       '@ksefnik/core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core
       '@ksefnik/http':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../http
       '@ksefnik/mcp':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../mcp
       '@ksefnik/shared':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../shared
       '@ksefnik/simulator':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../simulator
       '@modelcontextprotocol/sdk':
         specifier: ^1.12
@@ -110,7 +110,7 @@ importers:
   packages/core:
     dependencies:
       '@ksefnik/shared':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../shared
       better-sqlite3:
         specifier: ^11.7
@@ -138,10 +138,10 @@ importers:
   packages/http:
     dependencies:
       '@ksefnik/core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core
       '@ksefnik/shared':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../shared
       fast-xml-parser:
         specifier: ^4.5.0
@@ -166,11 +166,17 @@ importers:
   packages/mcp:
     dependencies:
       '@ksefnik/core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core
+      '@ksefnik/http':
+        specifier: workspace:^
+        version: link:../http
       '@ksefnik/shared':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../shared
+      '@ksefnik/simulator':
+        specifier: workspace:^
+        version: link:../simulator
       '@modelcontextprotocol/sdk':
         specifier: ^1.12
         version: 1.29.0(zod@3.25.76)
@@ -198,10 +204,10 @@ importers:
   packages/simulator:
     dependencies:
       '@ksefnik/core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core
       '@ksefnik/shared':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../shared
     devDependencies:
       typescript:

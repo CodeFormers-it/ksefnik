@@ -38,7 +38,9 @@ After merge, `prod-release.yml` automatically:
 4. Publishes to npm with provenance
 5. Commits version bump + tag `v0.1.0` to `prod`
 6. Creates a GitHub Release with auto-generated notes
-7. Opens a sync PR `prod` → `main`
+7. Builds docs Docker image tagged with `v0.1.0` and pushes to GHCR
+8. Deploys docs to VPS (`docs.ksefnik.pl`) — always in sync with npm version
+9. Opens a sync PR `prod` → `main`
 
 **Merge the sync PR** to keep `main` in sync with published versions.
 

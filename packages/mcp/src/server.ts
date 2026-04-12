@@ -8,6 +8,7 @@ import { queryInvoicesSchema, queryInvoices } from './tools/query-invoices.js'
 import { sendInvoiceSchema, sendInvoiceTool } from './tools/send-invoice.js'
 import { validateInvoiceSchema, validateInvoiceTool } from './tools/validate-invoice.js'
 import { confirmMatchSchema, confirmMatch } from './tools/confirm-match.js'
+import { getUpoSchema, getUpo } from './tools/get-upo.js'
 
 export function createMcpServer(ksef: Ksefnik): McpServer {
   const server = new McpServer({
@@ -75,6 +76,14 @@ export function createMcpServer(ksef: Ksefnik): McpServer {
     inputSchema: confirmMatchSchema.shape,
   }, async (input) => {
     const result = confirmMatch(input)
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
+  })
+
+  server.registerTool('get-upo', {
+    description: 'Check UPO (Urzędowe Poświadczenie Odbioru) status for a sent invoice',
+    inputSchema: getUpoSchema.shape,
+  }, async (input) => {
+    const result = await getUpo(ksef, input)
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
   })
 

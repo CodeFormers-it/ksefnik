@@ -1,0 +1,232 @@
+---
+title: Retry i obsluga bledow
+description: Mechanizm ponawiania zapytan z obsluga rate limitow, exponential backoff i klasy bledow HTTP.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components'
+
+Pakiet `@ksefnik/http` zawiera dedykowany mechanizm retry (`withHttpRetry`) zoptymalizowany pod limity KSeF API -- obsluguje naglowek `Retry-After` dla bledow 429 i exponential backoff z jitterem dla bledow 5xx.
+
+## withHttpRetry
+
+```ts
+import { withHttpRetry } from '@ksefnik/http'
+
+const result = await withHttpRetry(
+  () => fetchInvoicesHttp(http, params),
+  { maxAttempts: 5, baseDelayMs: 2000 },
+)
+```
+
+Wrapper `withHttpRetry` opakowuje dowolna funkcje asynchroniczna i automatycznie ponawia ja w przypadku bledow ponawianych.
+
+## Parametry
+
+```ts
+interface HttpRetryOptions {
+  maxAttempts?: number      // domyslnie 3
+  baseDelayMs?: number      // domyslnie 1000 ms
+  maxDelayMs?: number       // domyslnie 10000 ms
+  maxRetryAfterMs?: number  // domyslnie 30000 ms
+}
+```
+
+| Parametr | Domyslnie | Opis |
+|----------|-----------|------|
+| `maxAttempts` | `3` | Maksymalna liczba prob (lacznie z pierwsza) |
+| `baseDelayMs` | `1000` ms | Bazowe opoznienie miedzy probami |
+| `maxDelayMs` | `10000` ms | Maksymalne opoznienie exponential backoff |
+| `maxRetryAfterMs` | `30000` ms | Maksymalny czas oczekiwania na `Retry-After` |
+
+## Strategia retry
+
+Mechanizm stosuje rozne strategie w zaleznosci od typu bledu:
+
+### Rate limiting (HTTP 429)
+
+Gdy KSeF zwroci status 429, blad `KsefRateLimitError` zawiera pole `retryAfter` (w sekundach) z naglowka `Retry-After`. Klient czeka dokladnie tyle, ile wskazuje serwer (z clampem do `maxRetryAfterMs`):
+
+```
+waitMs = min(retryAfter * 1000, maxRetryAfterMs)
+waitMs = max(waitMs, baseDelayMs)
+```
+
+<Aside type="note">
+  Dla endpointu `/invoices/query/metadata` KSeF stosuje limity 8 req/s i 16 req/min. Staly exponential backoff bylby zbyt agresywny -- dlatego retry respektuje `Retry-After` zamiast sledpo podwajac opoznienie.
+</Aside>
+
+### Bledy serwera (5xx)
+
+Dla bledow 500-599 i bledow sieciowych (brak `statusCode`) stosowany jest exponential backoff z jitterem:
+
+```
+delay = min(baseDelayMs * 2^(attempt-1) + jitter, maxDelayMs)
+jitter = Math.random() * baseDelayMs * 0.1
+```
+
+| Proba | Bazowe opoznienie | Z jitterem (przyklad) |
+|-------|------------------|-----------------------|
+| 1 | 0 ms (natychmiast) | -- |
+| 2 | 1000 ms | ~1080 ms |
+| 3 | 2000 ms | ~2050 ms |
+| 4* | 4000 ms | ~4030 ms |
+
+*Przy domyslnym `maxAttempts: 3` czwarta proba nie nastapi.
+
+### Bledy nieponawialne
+
+Bledy klienta (4xx z wyjatkiem 429) i nieznane bledy rzucane sa natychmiast -- ponawianie nie pomoze:
+
+| Status HTTP | Ponawiany | Strategia |
+|-------------|-----------|-----------|
+| 429 | Tak | `Retry-After` z naglowka |
+| 500-599 | Tak | Exponential backoff + jitter |
+| Brak (siec) | Tak | Exponential backoff + jitter |
+| 400-428, 430-499 | **Nie** | Rzucony natychmiast |
+| Nieznany blad | **Nie** | Rzucony natychmiast |
+
+## Klasy bledow
+
+Pakiet eksportuje trzy klasy bledow, dziedziczace po `KsefApiError` z `@ksefnik/shared`:
+
+### KsefApiError
+
+Bazowa klasa dla wszystkich bledow HTTP. Rozszerza `KsefApiError` z `@ksefnik/shared` o pola specyficzne dla klienta HTTP:
+
+```ts
+class KsefApiError extends SharedKsefApiError {
+  statusCode?: number
+  requestId?: string
+  detailCode?: string
+}
+```
+
+| Pole | Typ | Opis |
+|------|-----|------|
+| `message` | `string` | Opis bledu |
+| `statusCode` | `number \| undefined` | Kod statusu HTTP |
+| `requestId` | `string \| undefined` | ID zapytania (jesli serwer zwrocil) |
+| `detailCode` | `string \| undefined` | Kod szczegolowy (np. `QUERY_TRUNCATED`, `AUTH_FAILED`) |
+| `context` | `Record<string, unknown> \| undefined` | Dodatkowy kontekst |
+
+### KsefAuthError
+
+Blad autentykacji -- dziedziczy po `KsefApiError`:
+
+```ts
+class KsefAuthError extends KsefApiError {
+  // Uzyty przy bledach w procesie challenge-response
+}
+```
+
+### KsefRateLimitError
+
+Blad rate limitingu (HTTP 429) -- zawiera pole `retryAfter`:
+
+```ts
+class KsefRateLimitError extends KsefApiError {
+  retryAfter: number // sekundy do nastepnej proby
+}
+```
+
+## Limity KSeF API
+
+<Aside type="caution">
+  KSeF stosuje surowe limity zapytan. Przekroczenie limitu skutkuje bledem 429 z naglowkiem `Retry-After`.
+</Aside>
+
+| Endpoint | Limit |
+|----------|-------|
+| `/invoices/query/metadata` | 8 req/s, 16 req/min |
+| Pozostale endpointy | Limity ogolne API KSeF |
+
+## Przyklady uzycia
+
+<Tabs>
+  <TabItem label="Domyslne opcje">
+    ```ts
+    import { createHttpAdapter } from '@ksefnik/http'
+
+    // Retry wbudowany w adapter -- domyslnie 3 proby
+    const adapter = createHttpAdapter({
+      nip: '5213456784',
+      token: process.env.KSEF_TOKEN!,
+      environment: 'production',
+    })
+    ```
+  </TabItem>
+  <TabItem label="Wiecej prob">
+    ```ts
+    const adapter = createHttpAdapter({
+      nip: '5213456784',
+      token: process.env.KSEF_TOKEN!,
+      environment: 'production',
+      client: {
+        retry: {
+          maxAttempts: 5,
+          baseDelayMs: 2000,
+          maxDelayMs: 30_000,
+          maxRetryAfterMs: 60_000,
+        },
+      },
+    })
+    ```
+  </TabItem>
+  <TabItem label="Standalone withHttpRetry">
+    ```ts
+    import { withHttpRetry, KsefApiError } from '@ksefnik/http'
+
+    try {
+      const result = await withHttpRetry(
+        () => riskyOperation(),
+        { maxAttempts: 4, baseDelayMs: 500 },
+      )
+    } catch (error) {
+      if (error instanceof KsefApiError) {
+        console.error(`KSeF error ${error.statusCode}: ${error.message}`)
+        console.error(`Detail: ${error.detailCode}`)
+      }
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+## Obsluga bledow w praktyce
+
+```ts
+import { createHttpAdapter, KsefApiError, KsefAuthError, KsefRateLimitError } from '@ksefnik/http'
+import { createKsefnik } from '@ksefnik/core'
+
+const adapter = createHttpAdapter({
+  nip: '5213456784',
+  token: process.env.KSEF_TOKEN!,
+  environment: 'production',
+})
+
+const ksefnik = createKsefnik({ nip: '5213456784', adapter })
+
+try {
+  await ksefnik.invoices.sync({
+    dateFrom: '2026-03-01',
+    dateTo: '2026-03-31',
+  })
+} catch (error) {
+  if (error instanceof KsefRateLimitError) {
+    console.error(`Rate limit -- ponow za ${error.retryAfter}s`)
+  } else if (error instanceof KsefAuthError) {
+    console.error('Blad autentykacji -- sprawdz token KSeF')
+  } else if (error instanceof KsefApiError) {
+    if (error.detailCode === 'QUERY_TRUNCATED') {
+      console.error('Za duzo faktur -- zawez zakres dat')
+    } else {
+      console.error(`Blad KSeF ${error.statusCode}: ${error.message}`)
+    }
+  }
+} finally {
+  await adapter.closeSession()
+}
+```
+
+<Aside type="tip">
+  Hierarchia dziedziczenia: `KsefRateLimitError` → `KsefApiError` → `SharedKsefApiError`. Jesli lapiesz `KsefApiError`, zlapiesz rowniez `KsefRateLimitError` i `KsefAuthError`. Sprawdzaj `instanceof` od najbardziej specyficznej klasy.
+</Aside>

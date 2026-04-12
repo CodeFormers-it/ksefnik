@@ -46,6 +46,8 @@ await adapter.closeSession?.()
 
 ## Flow uwierzytelnienia (KSeF 2.0)
 
+> Szczegolowy opis flow auth: [docs.ksefnik.pl/http/autentykacja](https://docs.ksefnik.pl/http/autentykacja/)
+
 1. `POST /auth/challenge` — serwer zwraca `{ challenge, timestamp }`.
 2. Klient szyfruje `"{ksefToken}|{timestamp}"` algorytmem **RSA-OAEP SHA-256** przy użyciu klucza publicznego MF.
 3. `POST /auth/ksef-token` — serwer zwraca `{ authenticationToken, referenceNumber }` (tymczasowy JWT).
@@ -56,6 +58,8 @@ await adapter.closeSession?.()
 Kryptografia: **wyłącznie RSA-OAEP SHA-256**, zaimplementowana przez `node:crypto` `webcrypto.subtle`. Zero zewnętrznych zależności kryptograficznych — nie musisz ufać `jose`, `crypto-js` ani żadnemu innemu pakietowi trzeciemu w sprawach podpisywania.
 
 ## Obsługa błędów
+
+> Retry, backoff i mapowanie bledow: [docs.ksefnik.pl/http/retry-i-bledy](https://docs.ksefnik.pl/http/retry-i-bledy/)
 
 ```ts
 import { KsefApiError, KsefAuthError, KsefRateLimitError } from '@ksefnik/http'
@@ -76,6 +80,8 @@ try {
 `withRetry` z `@ksefnik/core` automatycznie retry'uje `KsefRateLimitError` i odpowiedzi `5xx` z exponential backoff — więc w praktyce kod powyżej ratuje Cię przed przypadkami, których retry sensownie nie rozwiąże.
 
 ## Limity ratelimit
+
+> Jak Ksefnik obsluguje rate limiting i retry: [docs.ksefnik.pl/http/retry-i-bledy](https://docs.ksefnik.pl/http/retry-i-bledy/)
 
 Zgodnie z [limity-api.md](https://github.com/CIRFMF/ksef-docs/blob/main/limity/limity-api.md):
 

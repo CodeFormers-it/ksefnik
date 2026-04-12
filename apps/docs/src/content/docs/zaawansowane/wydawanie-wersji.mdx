@@ -1,0 +1,227 @@
+---
+title: Wydawanie wersji
+description: Proces release'u pakietow ksefnik na npm — strategia branchow, pipeline publikacji, skrypt wersjonowania i troubleshooting.
+---
+
+import { Tabs, TabItem, Steps, Aside, Card, CardGrid } from '@astrojs/starlight/components'
+
+Ksefnik stosuje prosty model release oparty na dwoch branchach i jednym skrypcie wersjonujacym.
+
+## Strategia branchow
+
+| Branch | Rola | Co sie dzieje po push/merge |
+|--------|------|-----------------------------|
+| `main` | Branch deweloperski | Nic automatycznego. CI odpala sie tylko na PR-ach. |
+| `prod` | Branch release'owy | Merge triggeruje pelny pipeline: bump → build → npm publish → tag → GitHub Release → sync PR |
+
+```
+main ─────●─────●─────●─────●─────●─────
+                       │              ↑
+                  PR do prod    sync PR prod→main
+                       │              │
+prod ──────────────────●──────────────●──
+                       │
+                  npm publish
+                  + git tag v0.3.0
+```
+
+<Aside type="caution">
+  Bezposredni push do `prod` jest zablokowany. Jedyna droga to PR z `main` do `prod`, zatwierdzony przez maintainera.
+</Aside>
+
+## Kto moze mergowac
+
+| Branch | Kto moze mergowac | Mechanizm |
+|--------|--------------------|-----------|
+| `main` | Kazdy czlonek organizacji | Standardowe review |
+| `prod` | Tylko `@luke-cf` | CODEOWNERS + branch protection + guard-prod.yml |
+
+Plik `CODEOWNERS` wymaga review od `@luke-cf` na kazdym PR do `prod`. Workflow `guard-prod.yml` automatycznie zamyka PR-y od osob spoza organizacji CodeFormers-it.
+
+## Przebieg release'u
+
+<Steps>
+1. **Otworz PR z `main` do `prod`**
+
+   ```bash
+   gh pr create --base prod --head main \
+     --title "Release: opis zmian"
+   ```
+
+2. **CI odpala sie na PR**
+
+   Workflow `ci.yml` uruchamia build, typecheck i testy. PR nie moze byc zmergowany, dopoki CI nie przejdzie.
+
+3. **Review i merge**
+
+   `@luke-cf` przegląda PR i merguje. To jest moment decyzji "chce wydac release".
+
+4. **Automatyczny pipeline** (po merge)
+
+   Workflow `prod-release.yml` wykonuje w kolejnosci:
+
+   - `pnpm typecheck` — ponowne sprawdzenie typow
+   - `pnpm test -- --run` — ponowne uruchomienie testow
+   - `node scripts/bump-version.mjs minor` — podbicie wersji minor
+   - `pnpm -r build` — build wszystkich pakietow
+   - `pnpm -r publish --access public --provenance` — publikacja na npm
+   - Commit wersji + push taga `v{version}`
+   - Utworzenie GitHub Release
+   - Otwarcie sync PR `prod → main`
+
+5. **Zmerguj sync PR**
+
+   Po release pipeline otwiera PR z `prod` do `main`, zeby zsynchronizowac podbite wersje w `package.json`. Zmerguj ten PR, zeby `main` odzwierciedlal opublikowane wersje.
+</Steps>
+
+## Skrypt wersjonowania
+
+Skrypt `scripts/bump-version.mjs` podbija wersje we **wszystkich 6 pakietach** jednoczesnie. Wszystkie pakiety maja zawsze ta sama wersje.
+
+```bash
+# Patch: 0.2.1 → 0.2.2
+node scripts/bump-version.mjs patch
+
+# Minor: 0.2.1 → 0.3.0 (domyslnie w pipeline)
+node scripts/bump-version.mjs minor
+
+# Major: 0.2.1 → 1.0.0
+node scripts/bump-version.mjs major
+```
+
+Pakiety objete wersjonowaniem:
+
+| Pakiet | npm |
+|--------|-----|
+| `@ksefnik/shared` | [npm](https://www.npmjs.com/package/@ksefnik/shared) |
+| `@ksefnik/core` | [npm](https://www.npmjs.com/package/@ksefnik/core) |
+| `@ksefnik/http` | [npm](https://www.npmjs.com/package/@ksefnik/http) |
+| `@ksefnik/simulator` | [npm](https://www.npmjs.com/package/@ksefnik/simulator) |
+| `@ksefnik/mcp` | [npm](https://www.npmjs.com/package/@ksefnik/mcp) |
+| `@ksefnik/cli` | [npm](https://www.npmjs.com/package/@ksefnik/cli) |
+
+<Aside type="note">
+  Skrypt modyfikuje pliki `packages/*/package.json`. Nie rusza `apps/*/package.json` ani root `package.json`.
+</Aside>
+
+## Wydanie major
+
+Automatyczny pipeline zawsze podbija wersje **minor**. Jesli potrzebujesz wydac wersje **major** (breaking change):
+
+<Steps>
+1. Przed otwarciem PR do `prod`, uruchom bump lokalnie:
+
+   ```bash
+   node scripts/bump-version.mjs major
+   ```
+
+2. Commituj zmiane:
+
+   ```bash
+   git add packages/*/package.json
+   git commit -m "chore: bump to v1.0.0"
+   ```
+
+3. Otworz PR do `prod` jak zwykle. Pipeline wykryje, ze wersje sa juz podbite i podbije je jeszcze raz o minor (np. `1.0.0 → 1.1.0`).
+</Steps>
+
+<Aside type="caution">
+  Jesli chcesz wydac dokladnie `1.0.0`, musisz zmodyfikowac workflow tak, zeby pominat krok bump. Alternatywnie, ustaw wersje na `0.255.255` i pozwol pipeline podbi minor do `1.0.0` — ale to hack.
+</Aside>
+
+## Publikacja na npm
+
+### Provenance
+
+Kazda paczka jest publikowana z flaga `--provenance`, co generuje podpisany atest [SLSA](https://slsa.dev/). Na stronie npm przy kazdej paczce widac:
+
+- Zrodlowe repozytorium
+- Commit, z ktorego paczka zostala zbudowana
+- Workflow, ktory ja opublikowal
+
+### Tokeny
+
+Publikacja wymaga tokenu npm ustawionego jako secret `NPM_TOKEN` w repozytorium GitHub. Token powinien byc typu **granular access token** z uprawnieniem publish do scope `@ksefnik`.
+
+### Flaga `--no-git-checks`
+
+Pipeline uzywa `--no-git-checks`, poniewaz publikacja odbywa sie z detached HEAD po checkout — git nie jest na zadnym branchu w tradycyjnym sensie.
+
+## Branch protection
+
+### main
+
+| Ustawienie | Wartosc |
+|------------|---------|
+| Require PR | Tak |
+| Required checks | `test` (CI workflow) |
+| Require up-to-date branch | Tak |
+| Allow force push | Nie |
+| Allow deletion | Nie |
+
+### prod
+
+| Ustawienie | Wartosc |
+|------------|---------|
+| Require PR | Tak |
+| Required reviewers | `@luke-cf` (CODEOWNERS) |
+| Required checks | `test` (CI workflow) |
+| Allow force push | Nie |
+| Allow deletion | Nie |
+| Restrict who can push | Tylko org members (+ guard-prod.yml) |
+
+## Troubleshooting
+
+### NPM_TOKEN wygasl
+
+**Objaw:** Pipeline pada na kroku "Publish to npm" z bledem `401 Unauthorized`.
+
+**Rozwiazanie:**
+1. Wejdz na [npmjs.com/settings/tokens](https://www.npmjs.com/settings/tokens)
+2. Wygeneruj nowy granular access token z uprawnieniem publish do `@ksefnik/*`
+3. Zaktualizuj secret `NPM_TOKEN` w Settings → Secrets → Actions
+
+### Wersje rozjechaly sie miedzy main i prod
+
+**Objaw:** PR sync `prod → main` ma konflikty w `package.json`.
+
+**Rozwiazanie:**
+1. Zmerguj sync PR recznie, rozwiazujac konflikty
+2. Zawsze przyjmuj wersje z `prod` — to sa opublikowane wersje
+
+```bash
+# W razie konfliktu
+git checkout prod -- packages/*/package.json
+git add packages/*/package.json
+git commit -m "chore: resolve version sync from prod"
+```
+
+### Self-hosted runner nie dziala
+
+**Objaw:** Workflow wisi w statusie "Queued" bez postepow.
+
+**Rozwiazanie:**
+1. Sprawdz Mac mini w biurze — czy jest wlaczony i podlaczony do sieci
+2. Sprawdz status runnera: Settings → Actions → Runners
+3. Jesli runner jest offline, uruchom go ponownie:
+
+   ```bash
+   ssh macmini
+   cd ~/actions-runner
+   ./run.sh
+   ```
+
+### Pipeline opublikowal paczke, ale nie utworzyl release
+
+**Objaw:** Paczki sa na npm, ale brak taga i GitHub Release.
+
+**Rozwiazanie:**
+1. Sprawdz logi workflow — zazwyczaj problem z uprawnieniami `contents: write`
+2. Utworz tag i release recznie:
+
+   ```bash
+   VERSION=$(node -p "require('./packages/shared/package.json').version")
+   git tag "v$VERSION"
+   git push origin "v$VERSION"
+   gh release create "v$VERSION" --generate-notes
+   ```

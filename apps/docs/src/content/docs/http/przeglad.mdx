@@ -1,0 +1,141 @@
+---
+title: Przeglad pakietu @ksefnik/http
+description: Klient HTTP do API KSeF v2 -- autentykacja RSA-OAEP, sesje, pobieranie faktur i retry.
+---
+
+import { Aside, Card, CardGrid, LinkCard } from '@astrojs/starlight/components'
+
+Pakiet `@ksefnik/http` to klient HTTP do API KSeF w wersji 2.0. Implementuje pelny protokol autentykacji challenge-response z szyfrowaniem RSA-OAEP, zarzadzanie sesjami (access + refresh token), pobieranie metadanych faktur z paginacja i opcjonalnym wzbogacaniem XML, oraz retry z obsluga rate limitow.
+
+<Aside type="tip">
+  `@ksefnik/http` to implementacja interfejsu `KsefClient` z `@ksefnik/core`. Mozesz go uzywac zamiennie z `@ksefnik/simulator` -- w produkcji uzyj HTTP, w testach symulator.
+</Aside>
+
+## Kiedy uzywac
+
+| Scenariusz | Pakiet |
+|------------|--------|
+| Produkcja -- prawdziwe API KSeF | `@ksefnik/http` |
+| Testy jednostkowe i integracyjne | `@ksefnik/simulator` |
+| Wlasna integracja (proxy, gateway) | Wlasna implementacja `KsefClient` |
+
+## Instalacja
+
+```bash
+pnpm add @ksefnik/http
+```
+
+`@ksefnik/http` wymaga `@ksefnik/core` i `@ksefnik/shared` jako peer dependencies.
+
+## Szybki start
+
+```ts
+import { createHttpAdapter } from '@ksefnik/http'
+import { createKsefnik } from '@ksefnik/core'
+
+const adapter = createHttpAdapter({
+  nip: '5213456784',
+  token: process.env.KSEF_TOKEN!,
+  environment: 'production',
+})
+
+const ksefnik = createKsefnik({
+  nip: '5213456784',
+  adapter,
+})
+
+await ksefnik.invoices.sync({
+  dateFrom: '2026-03-01',
+  dateTo: '2026-03-31',
+})
+```
+
+Funkcja `createHttpAdapter()` tworzy gotowy adapter -- inicjalizuje `KsefHttpClient` i opakowuje go w `KsefAdapterImpl` z `@ksefnik/core`.
+
+## Architektura
+
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌──────────┐
+│  Twoj kod   │────>│ KsefAdapterImpl  │────>│ KsefHttpClient  │────>│ KSeF API │
+│  (SDK/CLI)  │     │ (@ksefnik/core)  │     │ (@ksefnik/http) │     │ (MF v2)  │
+└─────────────┘     └──────────────────┘     └─────────────────┘     └──────────┘
+```
+
+`KsefHttpClient` implementuje interfejs `KsefClient` z `@ksefnik/core`. Adapter opakowuje go w stabilny interfejs `KsefAdapter`, dodajac zarzadzanie sesja i mapowanie typow.
+
+## Srodowiska
+
+Pakiet obsluguje trzy srodowiska KSeF:
+
+| Srodowisko | URL bazowy | Uzycie |
+|------------|-----------|--------|
+| `production` | `https://api.ksef.mf.gov.pl/v2` | Produkcja -- prawdziwe faktury |
+| `demo` | `https://api-demo.ksef.mf.gov.pl/v2` | Demo -- testowanie z prawdziwym API |
+| `test` | `https://api-test.ksef.mf.gov.pl/v2` | Testy -- srodowisko testowe MF |
+
+```ts
+import { ENDPOINTS } from '@ksefnik/http'
+
+console.log(ENDPOINTS.production) // https://api.ksef.mf.gov.pl/v2
+console.log(ENDPOINTS.demo)       // https://api-demo.ksef.mf.gov.pl/v2
+console.log(ENDPOINTS.test)       // https://api-test.ksef.mf.gov.pl/v2
+```
+
+## Opcje klienta
+
+`createHttpAdapter` przyjmuje opcjonalne parametry klienta:
+
+```ts
+const adapter = createHttpAdapter({
+  nip: '5213456784',
+  token: process.env.KSEF_TOKEN!,
+  environment: 'demo',
+  publicKeyPem: customPublicKey, // opcjonalnie -- pin klucza MF
+  client: {
+    timeoutMs: 30_000,           // timeout zapytan (domyslnie brak)
+    userAgent: 'my-app/1.0',    // naglowek User-Agent
+    retry: {                     // konfiguracja retry
+      maxAttempts: 5,
+      baseDelayMs: 2000,
+    },
+  },
+})
+```
+
+| Opcja | Typ | Domyslnie | Opis |
+|-------|-----|-----------|------|
+| `nip` | `string` | -- | NIP podatnika (wymagany) |
+| `token` | `string` | -- | Token KSeF do autentykacji (wymagany) |
+| `environment` | `'production' \| 'demo' \| 'test'` | -- | Srodowisko KSeF (wymagany) |
+| `publicKeyPem` | `string` | auto-fetch | Klucz publiczny MF w formacie PEM/SPKI |
+| `client.timeoutMs` | `number` | -- | Timeout zapytan HTTP w ms |
+| `client.userAgent` | `string` | -- | Naglowek User-Agent |
+| `client.retry` | `HttpRetryOptions` | domyslne | Konfiguracja mechanizmu retry |
+
+## Eksporty
+
+```ts
+// Glowne
+export { createHttpAdapter } from '@ksefnik/http'
+export { KsefHttpClient } from '@ksefnik/http'
+
+// Bledy
+export { KsefApiError, KsefAuthError, KsefRateLimitError } from '@ksefnik/http'
+
+// Retry
+export { withHttpRetry } from '@ksefnik/http'
+
+// Srodowiska
+export { ENDPOINTS } from '@ksefnik/http'
+
+// XML
+export { parseInvoiceXml } from '@ksefnik/http'
+```
+
+## Dalsze kroki
+
+<CardGrid>
+  <LinkCard title="Autentykacja" href="/http/autentykacja/" description="Protokol challenge-response i szyfrowanie RSA-OAEP." />
+  <LinkCard title="Pobieranie faktur" href="/http/pobieranie-faktur/" description="Paginacja, limity i wzbogacanie XML." />
+  <LinkCard title="Retry i bledy" href="/http/retry-i-bledy/" description="Exponential backoff, rate limiting i klasy bledow." />
+</CardGrid>

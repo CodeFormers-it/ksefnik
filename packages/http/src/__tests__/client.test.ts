@@ -269,7 +269,7 @@ describe('KsefHttpClient full flow', () => {
     expect(page).toBe(2)
   })
 
-  it('sendInvoice and getUpo throw Not implemented', async () => {
+  it('sendInvoice throws Not implemented', async () => {
     const client = new KsefHttpClient({
       environment: 'test',
       baseUrl: 'https://example.test/v2',
@@ -277,6 +277,17 @@ describe('KsefHttpClient full flow', () => {
       fetchImpl: makeMockFetch({}),
     })
     await expect(client.sendInvoice()).rejects.toThrow(/not implemented/i)
-    await expect(client.getUpo()).rejects.toThrow(/not implemented/i)
+  })
+
+  it('getUpo rejects invalid session token', async () => {
+    const client = new KsefHttpClient({
+      environment: 'test',
+      baseUrl: 'https://example.test/v2',
+      publicKeyPem: publicPem,
+      fetchImpl: makeMockFetch({}),
+    })
+    await expect(
+      client.getUpo({ token: 'invalid', ksefReferenceNumber: 'KSEF-123' }),
+    ).rejects.toThrow(/invalid session token/i)
   })
 })
