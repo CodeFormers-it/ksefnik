@@ -2,7 +2,7 @@
 
 **Mock serwera Krajowego Systemu e-Faktur (KSeF 2.0) do testów jednostkowych, integracyjnych i CI** — dla [Ksefnika](https://ksefnik.pl/), otwartego **KSeF SDK w TypeScript / Node.js**. Wstrzykujesz go w miejsce `@ksefnik/http`, odpalasz cały pipeline reconcyliacji offline, i masz deterministyczne, powtarzalne testy bez jednego requestu do `api.ksef.mf.gov.pl` — bez tokenu KSeF, bez klucza publicznego MF, bez zależności od dostępności środowiska testowego Ministerstwa Finansów.
 
-Jeżeli szukasz **mocka do KSeF**, **test harness dla polskiej e-faktury** albo **KSeF sandbox offline** do CI w GitHub Actions — to jest ten pakiet.
+Jeżeli szukasz **mocka do KSeF**, **test harness dla polskiej e-faktury** albo **KSeF sandbox offline** do CI w GitHub Actions — to jest ten pakiet. [Dokumentacja →](https://docs.ksefnik.pl/symulator/happy-path/)
 
 Po co to w ogóle istnieje:
 

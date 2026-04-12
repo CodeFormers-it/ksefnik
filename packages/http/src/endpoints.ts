@@ -31,5 +31,9 @@ export const PATHS = {
   queryMetadata: '/invoices/query/metadata',
   invoiceByKsefNumber: (ksefNumber: string): string =>
     `/invoices/ksef/${assertSafeReference(ksefNumber, 'ksefNumber')}`,
+  invoiceStatus: (sessionRef: string, invoiceRef: string): string =>
+    `/sessions/${assertSafeReference(sessionRef, 'sessionReferenceNumber')}/invoices/${assertSafeReference(invoiceRef, 'invoiceReferenceNumber')}`,
+  invoiceUpoByKsefNumber: (sessionRef: string, ksefNumber: string): string =>
+    `/sessions/${assertSafeReference(sessionRef, 'sessionReferenceNumber')}/invoices/ksef/${assertSafeReference(ksefNumber, 'ksefNumber')}/upo`,
   publicKeyCertificates: '/security/public-key-certificates',
 } as const

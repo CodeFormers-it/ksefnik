@@ -28,12 +28,12 @@ Serwer MCP to cienka warstwa, która tłumaczy wywołania narzędzi MCP na metod
     {
       "mcpServers": {
         "ksefnik": {
-          "command": "ksefnik",
-          "args": ["mcp", "--stdio"],
+          "command": "npx",
+          "args": ["-y", "@ksefnik/mcp"],
           "env": {
-            "KSEFNIK_NIP": "1234567890",
-            "KSEFNIK_TOKEN": "eyJhbGciOi...",
-            "KSEFNIK_ENV": "demo"
+            "KSEF_NIP": "1234567890",
+            "KSEF_TOKEN": "eyJhbGciOi...",
+            "KSEF_ENV": "demo"
           }
         }
       }
@@ -47,11 +47,11 @@ Serwer MCP to cienka warstwa, która tłumaczy wywołania narzędzi MCP na metod
     {
       "mcpServers": {
         "ksefnik": {
-          "command": "ksefnik",
-          "args": ["mcp", "--stdio"],
+          "command": "npx",
+          "args": ["-y", "@ksefnik/mcp"],
           "env": {
-            "KSEFNIK_NIP": "1234567890",
-            "KSEFNIK_TOKEN": "eyJhbGciOi..."
+            "KSEF_NIP": "1234567890",
+            "KSEF_TOKEN": "eyJhbGciOi..."
           }
         }
       }
@@ -59,17 +59,21 @@ Serwer MCP to cienka warstwa, która tłumaczy wywołania narzędzi MCP na metod
     ```
   </TabItem>
   <TabItem label="Claude Code">
-    Dodaj do `.claude/settings.json`:
+    ```bash
+    claude mcp add ksefnik -- npx -y @ksefnik/mcp
+    ```
+
+    Lub dodaj do `.claude/settings.json`:
 
     ```json
     {
       "mcpServers": {
         "ksefnik": {
-          "command": "ksefnik",
-          "args": ["mcp", "--stdio"],
+          "command": "npx",
+          "args": ["-y", "@ksefnik/mcp"],
           "env": {
-            "KSEFNIK_NIP": "1234567890",
-            "KSEFNIK_TOKEN": "eyJhbGciOi..."
+            "KSEF_NIP": "1234567890",
+            "KSEF_TOKEN": "eyJhbGciOi..."
           }
         }
       }
@@ -81,21 +85,17 @@ Serwer MCP to cienka warstwa, która tłumaczy wywołania narzędzi MCP na metod
 ## Testowanie
 
 <Steps>
-1. Zainstaluj ksefnik globalnie lub użyj `pnpm dlx`
-2. Uruchom serwer ręcznie, aby sprawdzić czy działa
-3. Sprawdź logi w kliencie AI
+1. Uruchom serwer ręcznie, aby sprawdzić czy działa
+2. Sprawdź logi w kliencie AI
 </Steps>
 
 ```bash
 # Test ręczny -- serwer powinien uruchomić się bez błędów
-ksefnik mcp --stdio
-
-# Z pnpm dlx (bez globalnej instalacji)
-pnpm dlx @ksefnik/cli mcp --stdio
+npx @ksefnik/mcp
 ```
 
 <Aside type="caution">
-Serwer MCP wymaga poprawnie skonfigurowanego NIP i tokena. Bez nich narzędzia wymagające połączenia z KSeF zwrócą błąd.
+Serwer MCP wymaga poprawnie skonfigurowanego NIP i tokena do pracy z prawdziwym KSeF. Bez tokena (`KSEF_TOKEN`) serwer automatycznie przełącza się na wbudowany symulator -- idealne do testowania i nauki, ale dane będą fikcyjne.
 </Aside>
 
 ## Dostępne narzędzia
@@ -110,5 +110,6 @@ Serwer MCP wymaga poprawnie skonfigurowanego NIP i tokena. Bez nich narzędzia w
 | `send-invoice` | Wysyłka faktury do KSeF |
 | `validate-invoice` | Walidacja faktury |
 | `confirm-match` | Potwierdzenie dopasowania |
+| `get-upo` | Sprawdzenie statusu UPO (potwierdzenie odbioru) |
 
 Każde narzędzie opisane jest szczegółowo na osobnej stronie.

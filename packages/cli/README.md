@@ -2,7 +2,7 @@
 
 **Wiersz poleceń do Krajowego Systemu e-Faktur (KSeF 2.0)** — pobieranie faktur, import wyciągów bankowych (MT940, mBank, ING, PKO BP, Santander), reconcyliacja faktur z przelewami, walidacja przed wysyłką i uruchamianie serwera **Model Context Protocol** dla Claude Desktop i Cursora. Część [Ksefnika](https://ksefnik.pl/) — otwartego **KSeF SDK w TypeScript / Node.js**. Jeden komfortowy binarny interfejs dla developerów, zespołów fintech, automatyzacji w CI / cron i agentów AI.
 
-Znany również jako: *KSeF CLI*, *ksef command line*, *e-faktura CLI*, *Polish e-Invoice CLI*, *KSeF MCP launcher*.
+Znany również jako: *KSeF CLI*, *ksef command line*, *e-faktura CLI*, *Polish e-Invoice CLI*, *KSeF MCP launcher*. [Dokumentacja CLI →](https://docs.ksefnik.pl/cli/przeglad/)
 
 ```bash
 npx @ksefnik/cli --help
@@ -112,6 +112,8 @@ ksefnik send ./faktura.xml
 
 ### `ksefnik mcp` — uruchom serwer MCP dla Claude
 
+> Pelna konfiguracja MCP: [docs.ksefnik.pl/mcp/konfiguracja](https://docs.ksefnik.pl/mcp/konfiguracja/)
+
 ```bash
 ksefnik mcp
 ```
@@ -135,7 +137,7 @@ To jest ta komenda, której używa Twoja konfiguracja Claude Desktop w `claude_d
 }
 ```
 
-Serwer używa `StdioServerTransport` z oficjalnego `@modelcontextprotocol/sdk` i wystawia 8 narzędzi (sync-invoices, query-invoices, import-bank, reconcile, get-unmatched, confirm-match, validate-invoice, send-invoice). Szczegóły w [`@ksefnik/mcp`](../mcp).
+Serwer używa `StdioServerTransport` z oficjalnego `@modelcontextprotocol/sdk` i wystawia 9 narzędzi (sync-invoices, query-invoices, import-bank, reconcile, get-unmatched, confirm-match, validate-invoice, send-invoice, get-upo). Szczegóły w [`@ksefnik/mcp`](../mcp).
 
 ## Flagi globalne
 

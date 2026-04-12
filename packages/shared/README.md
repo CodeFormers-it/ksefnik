@@ -4,7 +4,7 @@
 
 Ten pakiet to fundament całego monorepo. Nie zawiera logiki biznesowej, nie wykonuje żadnych wywołań sieciowych. Definiuje wyłącznie **modele domenowe**, **interfejsy adapterów** i **błędy** — tak, żeby wszystkie pozostałe pakiety (`@ksefnik/core`, `@ksefnik/http`, `@ksefnik/mcp`, `@ksefnik/cli`, `@ksefnik/simulator`) i pluginy zewnętrzne mówiły tym samym językiem.
 
-> Jeżeli piszesz własną integrację z KSeF, własny parser banku albo własny plugin reconcyliacyjny — zacznij właśnie tutaj. Importujesz typy, dziedziczysz kontrakt i dostajesz gotowe miejsce w pipeline.
+> Jeżeli piszesz własną integrację z KSeF, własny parser banku albo własny plugin reconcyliacyjny — zacznij właśnie tutaj. Importujesz typy, dziedziczysz kontrakt i dostajesz gotowe miejsce w pipeline. [Referencja API →](https://docs.ksefnik.pl/referencja/create-ksefnik/)
 
 ## Instalacja
 

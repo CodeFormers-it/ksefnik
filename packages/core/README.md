@@ -61,6 +61,8 @@ await adapter.closeSession?.()
 
 ### 1. Reconciliation Engine — 6-stopniowy pipeline
 
+> Jak dziala pipeline krok po kroku: [docs.ksefnik.pl/silnik-uzgadniania/jak-dziala-pipeline](https://docs.ksefnik.pl/silnik-uzgadniania/jak-dziala-pipeline/)
+
 Reconcyliacja KSeF ↔ bank to w praktyce mnóstwo krawędziowych przypadków: jeden przelew za kilka faktur, częściowe płatności, błędy w tytułach, kompensaty, kontrahenci z literówkami. Klasyczny SQL `JOIN ON amount AND date` daje może 40% trafień. `@ksefnik/core` implementuje **kaskadowy pipeline** — każdy pass działa tylko na tym, czego poprzedni nie rozstrzygnął, i każdy ma konfigurowalny `order`:
 
 | # | Pass | Strategia | `order` |
@@ -87,6 +89,8 @@ const matches = await runPipeline({
 ```
 
 ### 2. Bank Parsers — polskie banki out-of-the-box
+
+> Obslugiwane formaty i auto-detekcja: [docs.ksefnik.pl/parsery-bankowe/obslugiwane-formaty](https://docs.ksefnik.pl/parsery-bankowe/obslugiwane-formaty/)
 
 Importujesz plik wyciągu jedną funkcją. Auto-detekcja formatu (na podstawie sygnatur w treści), ekstrakcja NIP z tytułów przelewów, normalizacja kwot do groszy (int), mapowanie na `BankTransaction`.
 
@@ -125,6 +129,8 @@ Wspierane formaty:
 Własny parser? Zaimplementuj interfejs `BankStatementParser` z `@ksefnik/shared` i zarejestruj go przed wywołaniem pipeline.
 
 ### 3. Walidacja faktur (`validation/`)
+
+> Mechanizm walidacji i lista regul: [docs.ksefnik.pl/walidacja/mechanizm](https://docs.ksefnik.pl/walidacja/mechanizm/)
 
 Przed wysłaniem do KSeF faktura musi przejść walidację strukturalną **i** biznesową. Ministerstwo Finansów ma oficjalną listę kilkudziesięciu reguł. `@ksefnik/core` implementuje zestaw najczęściej łamanych:
 

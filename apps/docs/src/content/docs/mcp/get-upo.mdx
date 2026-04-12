@@ -1,0 +1,73 @@
+---
+title: "Narzędzie: get-upo"
+description: Sprawdzenie statusu UPO (Urzędowe Poświadczenie Odbioru) dla faktury wysłanej do KSeF.
+---
+
+import { Aside } from '@astrojs/starlight/components'
+
+Narzędzie `get-upo` pobiera status Urzędowego Poświadczenia Odbioru (UPO) dla faktury wysłanej do KSeF. UPO to oficjalne potwierdzenie, że KSeF przyjął i zarejestrował fakturę — odpowiednik podpisu zwrotnego w tradycyjnej korespondencji.
+
+## Parametry wejściowe
+
+| Parametr | Typ | Wymagany | Opis |
+|----------|-----|----------|------|
+| `ksefReferenceNumber` | `string` | Tak | Numer referencyjny KSeF faktury |
+
+## Format odpowiedzi
+
+```ts
+{
+  ksefReference: string
+  status: 'confirmed' | 'pending' | 'rejected'
+  upoXml: string | null
+}
+```
+
+### Statusy
+
+| Status | Znaczenie |
+|--------|-----------|
+| `confirmed` | KSeF przyjął fakturę. `upoXml` zawiera pełny dokument UPO w formacie XML. |
+| `pending` | Faktura jest jeszcze przetwarzana. Spróbuj ponownie za chwilę. |
+| `rejected` | KSeF odrzucił fakturę. Sprawdź szczegóły błędu w odpowiedzi. |
+
+## Przykład wywołania
+
+```json
+{
+  "name": "get-upo",
+  "arguments": {
+    "ksefReferenceNumber": "KSeF-1234567890-20260310-ABC123"
+  }
+}
+```
+
+## Przykład odpowiedzi
+
+```json
+{
+  "ksefReference": "KSeF-1234567890-20260310-ABC123",
+  "status": "confirmed",
+  "upoXml": "<?xml version=\"1.0\"?><UPO xmlns=\"http://ksef.mf.gov.pl/schema/gtw/svc/types/2021/10/01/0001\">...</UPO>"
+}
+```
+
+## Kiedy używać
+
+- Po wysłaniu faktury przez `send-invoice` -- sprawdź, czy KSeF ją przyjął
+- Gdy księgowość potrzebuje potwierdzenia odbioru do dokumentacji
+- Przy automatyzacji: wysyłka faktury, odczekanie, pobranie UPO
+
+<Aside type="caution">
+Narzędzie `get-upo` wymaga aktywnej sesji z prawdziwym KSeF. W trybie symulatora nie otrzymasz rzeczywistego UPO -- symulator zwróci fikcyjne dane ze statusem `confirmed`.
+</Aside>
+
+<Aside type="tip">
+Kwota czasu przetwarzania w KSeF zależy od obciążenia systemu. Jeśli status to `pending`, AI powinien poinformować użytkownika i zaproponować ponowne sprawdzenie za kilka minut.
+</Aside>
+
+## Powiązane narzędzia
+
+- `send-invoice` -- wysyłka faktury do KSeF (krok przed pobraniem UPO)
+- `validate-invoice` -- walidacja faktury przed wysyłką
+- `sync-invoices` -- synchronizacja faktur z KSeF

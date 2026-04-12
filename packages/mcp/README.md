@@ -1,6 +1,6 @@
 # @ksefnik/mcp — KSeF MCP server dla Claude, Cursor i agentów AI
 
-**Model Context Protocol server do Krajowego Systemu e-Faktur (KSeF 2.0) w TypeScript / Node.js.** Podpina polskie e-faktury bezpośrednio pod Claude Desktop, Cursor, Continue i każdego innego klienta MCP. 8 narzędzi pokrywa pełny workflow: pobieranie faktur z KSeF, import wyciągów bankowych (MT940, mBank, ING, PKO BP, Santander), reconcyliacja faktur z przelewami, walidacja przed wysłaniem i wysyłka do KSeF — wszystko wywoływalne z poziomu zwykłego czatu z AI.
+**Model Context Protocol server do Krajowego Systemu e-Faktur (KSeF 2.0) w TypeScript / Node.js.** Podpina polskie e-faktury bezpośrednio pod Claude Desktop, Cursor, Continue i każdego innego klienta MCP. 9 narzędzi pokrywa pełny workflow: pobieranie faktur z KSeF, import wyciągów bankowych (MT940, mBank, ING, PKO BP, Santander), reconcyliacja faktur z przelewami, walidacja przed wysłaniem i wysyłka do KSeF — wszystko wywoływalne z poziomu zwykłego czatu z AI.
 
 > Szukasz **KSeF MCP server**, **KSeF Claude AI integration**, **e-faktura AI agent** albo **Polish e-Invoice MCP**? Jesteś we właściwym miejscu. Ksefnik to jeden z pierwszych produkcyjnych serwerów Model Context Protocol do polskiej e-faktury.
 
@@ -30,6 +30,8 @@ pnpm add @ksefnik/http
 
 ## Konfiguracja Claude Desktop
 
+> Pelna instrukcja konfiguracji MCP: [docs.ksefnik.pl/mcp/konfiguracja](https://docs.ksefnik.pl/mcp/konfiguracja/)
+
 Najprostsza ścieżka — przez `@ksefnik/cli`, który zawiera komendę `mcp`:
 
 ```json
@@ -49,7 +51,7 @@ Najprostsza ścieżka — przez `@ksefnik/cli`, który zawiera komendę `mcp`:
 }
 ```
 
-Restart Claude Desktop → przy ikonie kłódki zobaczysz nowy serwer z 8 narzędziami.
+Restart Claude Desktop → przy ikonie kłódki zobaczysz nowy serwer z 9 narzędziami.
 
 ### Na Windows (PowerShell)
 
@@ -101,7 +103,9 @@ await server.connect(new StdioServerTransport())
 
 ## Narzędzia MCP
 
-Wszystkie 8 narzędzi rejestrowanych przez `createMcpServer()`:
+> Opis wszystkich narzedzi i przykladowe prompty: [docs.ksefnik.pl/mcp/konfiguracja](https://docs.ksefnik.pl/mcp/konfiguracja/)
+
+Wszystkie 9 narzędzi rejestrowanych przez `createMcpServer()`:
 
 | Narzędzie | Opis | Input (kluczowe pola) |
 |---|---|---|

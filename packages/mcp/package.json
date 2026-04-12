@@ -45,6 +45,9 @@
     "fintech"
   ],
   "type": "module",
+  "bin": {
+    "ksefnik-mcp": "./dist/bin.js"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": ["dist", "!dist/**/__tests__", "!dist/**/*.test.*", "README.md", "LICENSE"],
@@ -65,6 +68,8 @@
   "dependencies": {
     "@ksefnik/shared": "workspace:^",
     "@ksefnik/core": "workspace:^",
+    "@ksefnik/http": "workspace:^",
+    "@ksefnik/simulator": "workspace:^",
     "@modelcontextprotocol/sdk": "^1.12",
     "zod": "^3.24"
   },
