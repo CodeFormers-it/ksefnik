@@ -65,10 +65,10 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
           git add packages/*/package.json
-          git commit -m "chore(release): v$VERSION"
-          git tag "v$VERSION"
+          git commit -m "chore(release): v$VERSION" || echo "nothing to commit"
+          git tag -f "v$VERSION"
           git push origin prod
-          git push origin "v$VERSION"
+          git push origin "v$VERSION" --force
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
