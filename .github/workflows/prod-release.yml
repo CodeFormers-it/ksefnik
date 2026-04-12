@@ -85,9 +85,7 @@ jobs:
           DOCKER_CONFIG_DIR="$(mktemp -d)"
           trap 'rm -rf "$DOCKER_CONFIG_DIR"' EXIT
           AUTH_TOKEN=$(printf 'codeformers-it:%s' "${{ secrets.REPO_TOKEN_GITHUB_PAT }}" | base64)
-          cat > "$DOCKER_CONFIG_DIR/config.json" << DOCKEREOF
-          {"auths":{"ghcr.io":{"auth":"${AUTH_TOKEN}"}},"credsStore":""}
-          DOCKEREOF
+          printf '{"auths":{"ghcr.io":{"auth":"%s"}},"credsStore":""}' "$AUTH_TOKEN" > "$DOCKER_CONFIG_DIR/config.json"
           if [ -d "$HOME/.docker/cli-plugins" ]; then
             ln -sf "$HOME/.docker/cli-plugins" "$DOCKER_CONFIG_DIR/cli-plugins"
           fi
