@@ -248,4 +248,4 @@ TypeScript (strict) · Node.js 22 · Zod · fuzzball · mt940js · better-sqlite
 
 ## Licencja
 
-MIT. Część monorepo [ksefnik](../../README.md). Rozwijane przez [CodeFormers.it](https://codeformers.it/) — software house z Krakowa, budujący integracje KSeF, automatyzacje backoffice i dedykowane systemy księgowe w TypeScript. Jeżeli chcesz wpiąć Ksefnika w swój ERP albo potrzebujesz customowych passów reconcyliacyjnych — [porozmawiajmy](https://codeformers.it/).
+MIT. Część monorepo [ksefnik](../../README.md). Rozwijane przez [CodeFormers.it](https://codeformers.it/) — software house z Lublina, budujący integracje KSeF, automatyzacje backoffice i dedykowane systemy księgowe w TypeScript. Jeżeli chcesz wpiąć Ksefnika w swój ERP albo potrzebujesz customowych passów reconcyliacyjnych — [porozmawiajmy](https://codeformers.it/).
