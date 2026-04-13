@@ -27,14 +27,10 @@ echo "==> Syncing scripts..."
 scp "$REPO_ROOT/scripts/deploy.sh" "${VPS_HOST}:${VPS_DIR}/scripts/"
 ssh "$VPS_HOST" "chmod +x ${VPS_DIR}/scripts/deploy.sh"
 
-echo "==> Syncing nginx config..."
-scp "$REPO_ROOT/nginx/docs.ksefnik.conf" "${VPS_HOST}:/tmp/"
-ssh "$VPS_HOST" "sudo cp /tmp/docs.ksefnik.conf /etc/nginx/sites-available/ && \
-  sudo ln -sf /etc/nginx/sites-available/docs.ksefnik.conf /etc/nginx/sites-enabled/ && \
-  rm /tmp/docs.ksefnik.conf && \
-  sudo nginx -t && sudo systemctl reload nginx"
-
 echo "==> Files synced."
+echo ""
+echo "    NOTE: Nginx configs are managed in ksefnik-pro."
+echo "    Run ksefnik-pro/scripts/sync-nginx.sh to deploy nginx changes."
 
 # First-time setup
 if [ "${1:-}" = "--init" ]; then
