@@ -1,6 +1,6 @@
 {
   "name": "@ksefnik/simulator",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Offline KSeF mock server for testing and development without hitting the real Ministry of Finance API",
   "license": "MIT",
   "author": "CodeFormers",
