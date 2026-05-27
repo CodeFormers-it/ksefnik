@@ -7,10 +7,27 @@ name: Release to npm (prod)
 #
 # The merge to prod IS the "I want to release" decision.
 # Only @luke-cf can approve and merge PRs to prod.
+#
+# Pipeline shape (4 atomic jobs + sync-back):
+#   verify       - install/build/typecheck/test on the current SHA; uploads dist artifacts.
+#                  Safe to re-run - mutates nothing.
+#   publish-npm  - downloads dist, bumps versions, publishes to npm, commits + tags + GH release.
+#                  After this job the new vX.Y.Z tag exists on origin/prod.
+#   build-docs   - checks out the v${VERSION} tag, builds the docs Docker image, pushes to GHCR.
+#                  Re-runnable: same tag → same image content; tag overwrite is safe.
+#   deploy       - pulls the new image on the VPS, recreates the container, smoke-tests.
+#                  Re-runnable: just pulls latest again.
+#   sync-back    - opens a PR prod → main so version bumps land back in main.
 
 on:
   push:
     branches: [prod]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Verify only (no npm publish / git tag / docker push / deploy)'
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -24,15 +41,56 @@ env:
   PLATFORM: linux/amd64
 
 jobs:
-  release:
+  verify:
+    name: Verify (install / build / typecheck / test)
     if: github.actor != 'github-actions[bot]'
     runs-on: [self-hosted, codeformers]
-    timeout-minutes: 30
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm -r build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test -- --run
+        env:
+          CI: 'true'
+
+      - name: Upload dist artifacts
+        # publish-npm consumes these instead of rebuilding from scratch.
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-dist
+          path: packages/*/dist
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-npm:
+    name: Publish to npm + tag release
+    needs: verify
+    # Skip when dispatched manually with dry_run=true. push:prod events have no
+    # 'inputs' object, so the check evaluates to false and the job runs as normal.
+    if: github.event_name != 'workflow_dispatch' || inputs.dry_run == false
+    runs-on: [self-hosted, codeformers]
+    timeout-minutes: 15
     permissions:
       contents: write
       id-token: write
-      pull-requests: write
-      packages: write
     outputs:
       version: ${{ steps.tag.outputs.version }}
       sha: ${{ steps.tag.outputs.sha }}
@@ -50,23 +108,24 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
+      # We need node_modules so pnpm publish can resolve workspace:* refs into
+      # concrete versions when it rewrites package.json files on publish.
       - run: pnpm install --frozen-lockfile
 
-      - name: Build all packages
-        run: pnpm -r build
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Test
-        run: pnpm test -- --run
-        env:
-          CI: 'true'
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: packages-dist
+          path: packages
 
       - name: Bump minor versions in all packages
         run: node scripts/bump-version.mjs minor
 
       - name: Publish to npm
+        # --no-git-checks lets pnpm publish from a dirty tree (we just bumped versions).
+        # If a partial publish fails mid-way (some packages on npm, some not), the next
+        # rerun will skip already-published versions thanks to npm's own dedup, but the
+        # version bump commit will not be in git yet - rerun is safe.
         run: pnpm -r publish --access public --provenance --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -94,6 +153,23 @@ jobs:
           name: v${{ steps.tag.outputs.version }}
           generate_release_notes: true
 
+  build-docs:
+    name: Build & push docs Docker image
+    needs: publish-npm
+    runs-on: [self-hosted, codeformers]
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout published tag
+        # Building from the exact tag publish-npm just pushed guarantees the docs image
+        # version matches the npm release. If this job is rerun, the same tag is checked
+        # out and the same image content is produced.
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.publish-npm.outputs.version }}
+
       - name: Log in to GHCR
         run: echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
 
@@ -102,7 +178,7 @@ jobs:
           docker buildx inspect ksefnik-builder >/dev/null 2>&1 \
             || docker buildx create --name ksefnik-builder --driver docker-container --bootstrap
 
-      - name: Build & push docs Docker image
+      - name: Build & push
         env:
           PRO_REPO_TOKEN: ${{ secrets.PRO_REPO_TOKEN }}
         run: |
@@ -116,8 +192,8 @@ jobs:
             --push \
             -f docker/docs.Dockerfile \
             -t "${IMAGE}:latest" \
-            -t "${IMAGE}:v${{ steps.tag.outputs.version }}" \
-            -t "${IMAGE}:${{ steps.tag.outputs.sha }}" \
+            -t "${IMAGE}:v${{ needs.publish-npm.outputs.version }}" \
+            -t "${IMAGE}:${{ needs.publish-npm.outputs.sha }}" \
             $BUILD_ARGS \
             .
 
@@ -127,13 +203,13 @@ jobs:
 
   deploy:
     name: Deploy docs on VPS
-    needs: release
+    needs: [publish-npm, build-docs]
     runs-on: [self-hosted, vps-codeformers]
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: prod
+          ref: v${{ needs.publish-npm.outputs.version }}
 
       - name: Sync compose + deploy script into deploy dir
         run: |
@@ -154,7 +230,7 @@ jobs:
 
   sync-back:
     name: Open sync PR prod → main
-    needs: release
+    needs: publish-npm
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -167,7 +243,7 @@ jobs:
       - name: Create sync PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ needs.release.outputs.version }}
+          VERSION: ${{ needs.publish-npm.outputs.version }}
         run: |
           gh pr create \
             --base main \
