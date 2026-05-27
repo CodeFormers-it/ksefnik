@@ -15,18 +15,24 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: Check org membership
+      - name: Check author association
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          PR: ${{ github.event.pull_request.number }}
+        # GitHub computes author_association on the event itself - no extra API call,
+        # no auth-as-bot edge cases. OWNER/MEMBER/COLLABORATOR all imply trusted.
+        # Anyone else (CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR, NONE) gets the PR closed.
         run: |
-          AUTHOR="${{ github.event.pull_request.user.login }}"
-          STATUS=$(gh api orgs/CodeFormers-it/members/$AUTHOR --silent -i 2>&1 | head -1 | grep -o '[0-9]\{3\}')
-
-          if [ "$STATUS" != "204" ]; then
-            gh pr close ${{ github.event.pull_request.number }} \
-              --repo ${{ github.repository }} \
-              --comment "PRs to \`prod\` are restricted to org members. Please open your PR against \`main\` instead."
-            echo "Closed PR #${{ github.event.pull_request.number }} from external contributor $AUTHOR"
-          else
-            echo "$AUTHOR is an org member — PR allowed"
-          fi
+          case "$ASSOCIATION" in
+            OWNER|MEMBER|COLLABORATOR)
+              echo "$AUTHOR association=$ASSOCIATION - PR allowed"
+              ;;
+            *)
+              gh pr close "$PR" \
+                --repo "${{ github.repository }}" \
+                --comment "PRs to \`prod\` are restricted to org members. Please open your PR against \`main\` instead."
+              echo "Closed PR #$PR from $AUTHOR (association=$ASSOCIATION)"
+              ;;
+          esac
