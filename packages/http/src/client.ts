@@ -15,7 +15,7 @@ import {
   shouldRefresh,
   type ActiveSession,
 } from './session.js'
-import { fetchInvoices as fetchInvoicesHttp } from './invoices.js'
+import { fetchInvoices as fetchInvoicesHttp, fetchInvoiceXml as fetchInvoiceXmlHttp } from './invoices.js'
 import { fetchUpoXml } from './upo.js'
 import { KsefApiError } from './errors.js'
 import { fetchKsefTokenEncryptionKey } from './public-key.js'
@@ -129,6 +129,7 @@ export class KsefHttpClient implements KsefClient {
     subjectType?: 'Subject1' | 'Subject2' | 'Subject3'
     pageSize?: number
     pageOffset?: number
+    includeXml?: boolean
   }): Promise<{ invoices: KsefRawInvoice[]; total: number }> {
     let session = decodeSessionToken(params.token)
     if (!session) {
@@ -151,10 +152,29 @@ export class KsefHttpClient implements KsefClient {
           pageSize: params.pageSize,
           pageOffset: params.pageOffset,
           subjectType: params.subjectType ?? 'Subject2',
+          includeXml: params.includeXml,
         }),
       this.retryOpts,
     )
     return result
+  }
+
+  async fetchInvoiceXml(params: { token: string; ksefNumber: string }): Promise<string> {
+    let session = decodeSessionToken(params.token)
+    if (!session) {
+      throw new Error('KsefHttpClient.fetchInvoiceXml: invalid session token')
+    }
+    if (shouldRefresh(session)) {
+      session = await withHttpRetry(
+        () => refreshAccessToken(this.http, session as ActiveSession),
+        this.retryOpts,
+      )
+    }
+    return withHttpRetry(
+      () =>
+        fetchInvoiceXmlHttp(this.http, (session as ActiveSession).accessToken, params.ksefNumber),
+      this.retryOpts,
+    )
   }
 
   async sendInvoice(): Promise<{ ksefReferenceNumber: string; timestamp: string }> {

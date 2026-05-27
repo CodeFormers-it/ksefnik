@@ -52,6 +52,7 @@ export class KsefAdapterImpl implements KsefAdapter {
       subjectType,
       pageSize: opts.pageSize,
       pageOffset: opts.pageOffset,
+      includeXml: opts.includeXml,
     })
 
     return result.invoices.map((raw) => ({
