@@ -14,19 +14,87 @@ on:
         type: boolean
         default: true
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ksefnik-docs
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/codeformers-it/ksefnik-docs
+  PLATFORM: linux/amd64
+
 jobs:
   build:
+    name: Build & push image
     runs-on: [self-hosted, codeformers]
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      sha: ${{ steps.meta.outputs.sha }}
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build & push Docker image
-        run: ./scripts/build-and-push.sh
+      - id: meta
+        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        run: echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+
+      - name: Ensure buildx builder exists
+        run: |
+          docker buildx inspect ksefnik-builder >/dev/null 2>&1 \
+            || docker buildx create --name ksefnik-builder --driver docker-container --bootstrap
+
+      - name: Build & push
+        env:
+          PRO_REPO_TOKEN: ${{ secrets.PRO_REPO_TOKEN }}
+        run: |
+          BUILD_ARGS=""
+          if [ -n "$PRO_REPO_TOKEN" ]; then
+            BUILD_ARGS="--build-arg PRO_REPO_TOKEN=${PRO_REPO_TOKEN}"
+          fi
+          docker buildx build \
+            --builder ksefnik-builder \
+            --platform "${PLATFORM}" \
+            --push \
+            -f docker/docs.Dockerfile \
+            -t "${IMAGE}:latest" \
+            -t "${IMAGE}:${{ steps.meta.outputs.sha }}" \
+            $BUILD_ARGS \
+            .
+
+      - name: Logout from GHCR
+        if: always()
+        run: docker logout ghcr.io || true
 
   deploy:
+    name: Deploy docs on VPS
     needs: build
     if: github.event_name == 'workflow_dispatch' && inputs.deploy
-    runs-on: [self-hosted, codeformers]
+    runs-on: [self-hosted, vps-codeformers]
+    timeout-minutes: 5
+
     steps:
-      - name: Deploy to VPS
-        run: ssh codeformers "cd /home/ubuntu/ksefnik.pl && ./scripts/deploy.sh"
+      - uses: actions/checkout@v4
+
+      - name: Sync compose + deploy script into deploy dir
+        run: |
+          set -e
+          DEPLOY_DIR=/home/ubuntu/ksefnik.pl
+          install -m 644 docker-compose.prod.yml "${DEPLOY_DIR}/docker-compose.prod.yml"
+          install -m 755 scripts/deploy.sh        "${DEPLOY_DIR}/scripts/deploy.sh"
+
+      - name: Run deploy.sh
+        run: /home/ubuntu/ksefnik.pl/scripts/deploy.sh
+
+      - name: Smoke test
+        run: |
+          set -e
+          status=$(curl -sS -o /dev/null -w '%{http_code}' -m 10 http://127.0.0.1:7020/)
+          echo "http://127.0.0.1:7020/ -> HTTP ${status}"
+          [ "${status}" = "200" ] || exit 1

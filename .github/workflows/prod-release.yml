@@ -2,7 +2,8 @@ name: Release to npm (prod)
 
 # Merging into prod bumps the minor version of all @ksefnik/* packages,
 # builds everything, publishes to npm with provenance, tags the release,
-# and opens a sync PR back to main.
+# builds the docs Docker image, deploys it to the VPS, and opens a sync PR
+# back to main.
 #
 # The merge to prod IS the "I want to release" decision.
 # Only @luke-cf can approve and merge PRs to prod.
@@ -12,14 +13,29 @@ on:
     branches: [prod]
 
 permissions:
-  contents: write
-  id-token: write
-  pull-requests: write
+  contents: read
+
+concurrency:
+  group: ksefnik-release
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/codeformers-it/ksefnik-docs
+  PLATFORM: linux/amd64
 
 jobs:
   release:
     if: github.actor != 'github-actions[bot]'
     runs-on: [self-hosted, codeformers]
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      id-token: write
+      pull-requests: write
+      packages: write
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      sha: ${{ steps.tag.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,6 +85,7 @@ jobs:
           git tag -f "v$VERSION"
           git push origin prod
           git push origin "v$VERSION" --force
+          echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -77,47 +94,84 @@ jobs:
           name: v${{ steps.tag.outputs.version }}
           generate_release_notes: true
 
-      - name: Build docs Docker image (tagged with npm version)
+      - name: Log in to GHCR
+        run: echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+
+      - name: Ensure buildx builder exists
         run: |
-          VERSION="${{ steps.tag.outputs.version }}"
-          GIT_SHA=$(git rev-parse --short HEAD)
+          docker buildx inspect ksefnik-builder >/dev/null 2>&1 \
+            || docker buildx create --name ksefnik-builder --driver docker-container --bootstrap
 
-          DOCKER_CONFIG_DIR="$(mktemp -d)"
-          trap 'rm -rf "$DOCKER_CONFIG_DIR"' EXIT
-          AUTH_TOKEN=$(printf 'codeformers-it:%s' "${{ secrets.REPO_TOKEN_GITHUB_PAT }}" | base64)
-          printf '{"auths":{"ghcr.io":{"auth":"%s"}},"credsStore":""}' "$AUTH_TOKEN" > "$DOCKER_CONFIG_DIR/config.json"
-          if [ -d "$HOME/.docker/cli-plugins" ]; then
-            ln -sf "$HOME/.docker/cli-plugins" "$DOCKER_CONFIG_DIR/cli-plugins"
-          fi
-          export DOCKER_CONFIG="$DOCKER_CONFIG_DIR"
-
-          BUILD_ARGS=""
-          if [ -n "${PRO_REPO_TOKEN:-}" ]; then
-            BUILD_ARGS="--build-arg PRO_REPO_TOKEN=${PRO_REPO_TOKEN}"
-          fi
-
-          docker buildx build \
-            --platform linux/amd64 \
-            --push \
-            -f docker/docs.Dockerfile \
-            -t "ghcr.io/codeformers-it/ksefnik-docs:latest" \
-            -t "ghcr.io/codeformers-it/ksefnik-docs:v${VERSION}" \
-            -t "ghcr.io/codeformers-it/ksefnik-docs:${GIT_SHA}" \
-            $BUILD_ARGS \
-            .
+      - name: Build & push docs Docker image
         env:
           PRO_REPO_TOKEN: ${{ secrets.PRO_REPO_TOKEN }}
+        run: |
+          BUILD_ARGS=""
+          if [ -n "$PRO_REPO_TOKEN" ]; then
+            BUILD_ARGS="--build-arg PRO_REPO_TOKEN=${PRO_REPO_TOKEN}"
+          fi
+          docker buildx build \
+            --builder ksefnik-builder \
+            --platform "${PLATFORM}" \
+            --push \
+            -f docker/docs.Dockerfile \
+            -t "${IMAGE}:latest" \
+            -t "${IMAGE}:v${{ steps.tag.outputs.version }}" \
+            -t "${IMAGE}:${{ steps.tag.outputs.sha }}" \
+            $BUILD_ARGS \
+            .
 
-      - name: Deploy docs to VPS
-        run: ssh codeformers "cd /home/ubuntu/ksefnik.pl && ./scripts/deploy.sh"
+      - name: Logout from GHCR
+        if: always()
+        run: docker logout ghcr.io || true
 
-      - name: Open sync PR prod → main
+  deploy:
+    name: Deploy docs on VPS
+    needs: release
+    runs-on: [self-hosted, vps-codeformers]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: prod
+
+      - name: Sync compose + deploy script into deploy dir
+        run: |
+          set -e
+          DEPLOY_DIR=/home/ubuntu/ksefnik.pl
+          install -m 644 docker-compose.prod.yml "${DEPLOY_DIR}/docker-compose.prod.yml"
+          install -m 755 scripts/deploy.sh        "${DEPLOY_DIR}/scripts/deploy.sh"
+
+      - name: Run deploy.sh
+        run: /home/ubuntu/ksefnik.pl/scripts/deploy.sh
+
+      - name: Smoke test
+        run: |
+          set -e
+          status=$(curl -sS -o /dev/null -w '%{http_code}' -m 10 http://127.0.0.1:7020/)
+          echo "http://127.0.0.1:7020/ -> HTTP ${status}"
+          [ "${status}" = "200" ] || exit 1
+
+  sync-back:
+    name: Open sync PR prod → main
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create sync PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.release.outputs.version }}
         run: |
           gh pr create \
             --base main \
             --head prod \
-            --title "chore: sync versions from prod v${{ steps.tag.outputs.version }}" \
-            --body "Automated version sync after npm release of v${{ steps.tag.outputs.version }}. Merge to bring main in line with published versions." \
-            || echo "sync PR already exists or no diff — skipping"
+            --title "chore: sync versions from prod v${VERSION}" \
+            --body "Automated version sync after npm release of v${VERSION}. Merge to bring main in line with published versions." \
+            || echo "sync PR already exists or no diff - skipping"
