@@ -38,6 +38,7 @@ export interface KsefClient {
     subjectType?: KsefSubjectType
     pageSize?: number
     pageOffset?: number
+    includeXml?: boolean
   }): Promise<{ invoices: KsefRawInvoice[]; total: number }>
   sendInvoice(params: {
     token: string

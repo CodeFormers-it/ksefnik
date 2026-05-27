@@ -14,6 +14,12 @@ export interface FetchInvoicesOpts {
   subjectType?: InvoiceSubjectType
   pageSize?: number
   pageOffset?: number
+  /**
+   * When true, also fetch the full FA(2)/FA(3) XML body for each invoice via
+   * `GET /invoices/ksef/{ksefNumber}` and put it on `Invoice.rawXml`. Off by
+   * default — metadata alone covers grossAmount/NIPs/dates.
+   */
+  includeXml?: boolean
 }
 
 export interface SendInvoiceInput {
